@@ -6,7 +6,13 @@
 
 import type { ListingJSON } from "@/types/listing";
 import { urlHash } from "@/lib/hash";
-import { getOrSet, cacheKey, CACHE_PREFIXES, CACHE_TTL, get } from "@/lib/cache";
+import {
+  cacheKey,
+  CACHE_PREFIXES,
+  CACHE_TTL,
+  get,
+  set,
+} from "@/lib/cache";
 import { isFullAddress } from "@/lib/normalize";
 
 /**
@@ -204,17 +210,14 @@ export function mergeListings(
  * Extract just the address from a Zillow URL
  * Checks cached scraped data first, then tries to get from browser extension cache
  * Returns the address string if found, null otherwise
- * 
+ *
  * This allows us to derive an address from a Zillow URL and then use it with RentCast
+ * Note: This function checks cache without requiring FEATURE_SCRAPE_FALLBACK.
+ *       Only actual scraping operations require the feature flag.
  */
 export async function extractAddressFromZillowUrl(
   url: string
 ): Promise<string | null> {
-  // Feature flag check
-  if (process.env.FEATURE_SCRAPE_FALLBACK !== "true") {
-    return null;
-  }
-
   // Only work with Zillow URLs
   try {
     const urlObj = new URL(url);
@@ -231,8 +234,13 @@ export async function extractAddressFromZillowUrl(
 
   try {
     // Check if we already have scraped data cached for this URL
+    // This doesn't require FEATURE_SCRAPE_FALLBACK - it's just reading cache
     const cached = await get<ListingJSON>(cacheKeyStr);
-    if (cached && cached.listing.address && isFullAddress(cached.listing.address)) {
+    if (
+      cached &&
+      cached.listing.address &&
+      isFullAddress(cached.listing.address)
+    ) {
       return cached.listing.address;
     }
   } catch {
@@ -241,8 +249,13 @@ export async function extractAddressFromZillowUrl(
 
   // Try to get from browser extension cache (via getScrapedListing)
   // This checks if browser extension has already scraped and cached this URL
+  // getScrapedListing will handle the feature flag check for actual scraping
   const scraped = await getScrapedListing(url);
-  if (scraped && scraped.listing.address && isFullAddress(scraped.listing.address)) {
+  if (
+    scraped &&
+    scraped.listing.address &&
+    isFullAddress(scraped.listing.address)
+  ) {
     return scraped.listing.address;
   }
 
@@ -252,39 +265,43 @@ export async function extractAddressFromZillowUrl(
 /**
  * Get or create scraped listing data
  * Caches scraped data with short TTL (6 hours)
+ * 
+ * Note: Cache reads don't require FEATURE_SCRAPE_FALLBACK.
+ *       Only actual scraping operations require the feature flag.
  */
 export async function getScrapedListing(
   url: string,
   scrapedData?: ScrapedData
 ): Promise<ListingJSON | null> {
-  // Feature flag check
+  const hash = urlHash(url);
+  const version = "v1";
+  const cacheKeyStr = cacheKey(CACHE_PREFIXES.SCRAPE, hash, version);
+
+  // If scrapedData is provided (from browser extension), cache it immediately
+  // This doesn't require FEATURE_SCRAPE_FALLBACK - it's just caching user-provided data
+  if (scrapedData) {
+    const normalized = normalizeScrapedData(scrapedData);
+    // Cache it
+    await set(cacheKeyStr, normalized, { ttl: CACHE_TTL.SCRAPE });
+    return normalized;
+  }
+
+  // Try to get from cache first (no feature flag required for cache reads)
+  try {
+    const cached = await get<ListingJSON>(cacheKeyStr);
+    if (cached) {
+      return cached;
+    }
+  } catch {
+    // Continue to try other methods
+  }
+
+  // If not in cache and no scrapedData provided, require feature flag for scraping
   if (process.env.FEATURE_SCRAPE_FALLBACK !== "true") {
     return null;
   }
 
-  const hash = urlHash(url);
-  const version = "v1";
-
-  // If scrapedData is provided, use it directly (from browser extension)
-  if (scrapedData) {
-    const normalized = normalizeScrapedData(scrapedData);
-    // Cache it
-    await getOrSet(
-      cacheKey(CACHE_PREFIXES.SCRAPE, hash, version),
-      CACHE_TTL.SCRAPE,
-      async () => normalized
-    );
-    return normalized;
-  }
-
-  // Otherwise, try to get from cache
-  return await getOrSet(
-    cacheKey(CACHE_PREFIXES.SCRAPE, hash, version),
-    CACHE_TTL.SCRAPE,
-    async () => {
-      // If no scraped data provided and not in cache, return null
-      // Server-side scraping would go here (future enhancement)
-      return null;
-    }
-  );
+  // Future: Server-side scraping would go here
+  // For now, return null if not in cache and no scrapedData provided
+  return null;
 }
