@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { useUser, SignUp } from "@clerk/nextjs";
+import { useUser, SignUpButton } from "@clerk/nextjs";
 
 export function HeroSection() {
   const { isSignedIn, isLoaded: userLoaded } = useUser();
+  const signUpButtonRef = useRef<HTMLButtonElement>(null);
   const [address, setAddress] = useState("");
-  const [workAddress, setWorkAddress] = useState("");
+  const [workAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showSignUp, setShowSignUp] = useState(false);
   const [pendingDecode, setPendingDecode] = useState<{ address: string; workAddress: string } | null>(null);
 
   const performDecode = useCallback(async (addr: string, workAddr: string) => {
@@ -94,22 +94,29 @@ export function HeroSection() {
       // User just signed up, retry the decode
       performDecode(pendingDecode.address, pendingDecode.workAddress);
       setPendingDecode(null);
-      setShowSignUp(false);
     }
   }, [isSignedIn, pendingDecode, userLoaded, performDecode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate address is entered
+    if (!address.trim()) {
+      setError("Please enter a property address");
+      return;
+    }
+
     // Wait for user to load
     if (!userLoaded) {
+      setError("Loading...");
       return;
     }
 
     // If not signed in, show sign-up modal and store the decode request
     if (!isSignedIn) {
       setPendingDecode({ address, workAddress });
-      setShowSignUp(true);
+      // Trigger Clerk's sign-up modal
+      signUpButtonRef.current?.click();
       return;
     }
 
@@ -124,10 +131,10 @@ export function HeroSection() {
         <div className="flex flex-col justify-center">
           <div className="mb-4">
             <p className="text-4xl font-black leading-tight text-[#1E1E1E] md:text-5xl lg:text-6xl">
-              They said <span className="italic">'Cozy.'</span>
+              They said <span className="italic">&apos;Cozy.&apos;</span>
             </p>
             <p className="text-4xl font-black leading-tight text-[#DC2626] md:text-5xl lg:text-6xl">
-              We heard <span className="italic">'Cramped.'</span>
+              We heard <span className="italic">&apos;Cramped.&apos;</span>
             </p>
           </div>
           <p className="mb-8 text-lg leading-relaxed text-[#1E1E1E] md:text-xl">
@@ -187,54 +194,12 @@ export function HeroSection() {
           </Link>
         </div>
 
-        {/* Sign-Up Modal */}
-        {showSignUp && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="relative w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
-              <button
-                onClick={() => {
-                  setShowSignUp(false);
-                  setPendingDecode(null);
-                }}
-                className="absolute right-4 top-4 text-[#1E1E1E]/40 hover:text-[#1E1E1E]"
-                aria-label="Close"
-              >
-                <svg
-                  className="h-6 w-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-              <div className="mb-6">
-                <h2 className="mb-2 text-2xl font-black text-[#1E1E1E]">
-                  Sign up to decode listings
-                </h2>
-                <p className="text-[#1E1E1E]/70">
-                  New users get <span className="font-semibold text-[#DC2626]">one free listing check</span> when you sign up!
-                </p>
-              </div>
-              <SignUp
-                routing="virtual"
-                appearance={{
-                  elements: {
-                    rootBox: "w-full",
-                    card: "shadow-none",
-                  },
-                }}
-                afterSignUpUrl="/"
-                afterSignInUrl="/"
-              />
-            </div>
-          </div>
-        )}
+        {/* Hidden SignUpButton to trigger modal programmatically */}
+        <div className="hidden">
+          <SignUpButton mode="modal" fallbackRedirectUrl="/" forceRedirectUrl="/">
+            <button ref={signUpButtonRef} type="button" />
+          </SignUpButton>
+        </div>
 
         {/* Right Column: Mascot Illustration */}
         <div className="relative flex items-center justify-center lg:justify-end">

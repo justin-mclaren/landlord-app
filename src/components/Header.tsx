@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useUser, SignUpButton } from "@clerk/nextjs";
 
 export function Header() {
+  const { isSignedIn } = useUser();
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-[#1A1B2E]/10 bg-[#FFF8F0]">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 md:px-6 lg:px-8">
@@ -49,12 +52,20 @@ export function Header() {
           >
             Pricing
           </Link>
-          <Link
-            href="/sign-in"
-            className="text-sm font-medium text-[#1E1E1E] transition-colors hover:text-[#DC2626]"
-          >
-            Sign in
-          </Link>
+          {!isSignedIn ? (
+            <SignUpButton mode="modal" fallbackRedirectUrl="/" forceRedirectUrl="/">
+              <button className="rounded-full bg-[#DC2626] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#DC2626]/90">
+                Sign up
+              </button>
+            </SignUpButton>
+          ) : (
+            <Link
+              href="/sign-in"
+              className="text-sm font-medium text-[#1E1E1E] transition-colors hover:text-[#DC2626]"
+            >
+              Sign in
+            </Link>
+          )}
         </nav>
       </div>
     </header>
