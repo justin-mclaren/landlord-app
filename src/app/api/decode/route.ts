@@ -3,6 +3,7 @@
  * Main decode endpoint - starts the decode workflow
  */
 import { NextResponse } from "next/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { executeDecodeFlowSafe } from "@/flows/decode";
 import type { DecodeFlowInput } from "@/types/workflow";
 import {
@@ -12,6 +13,8 @@ import {
   getUserMessage,
   getErrorCode,
 } from "@/lib/errors";
+import { hasQuotaRemaining, getRemainingQuota, consumeDecode } from "@/lib/quotas";
+import { getPlanFeatures } from "@/lib/entitlements";
 
 export async function POST(request: Request) {
   try {
@@ -51,6 +54,26 @@ export async function POST(request: Request) {
       }
     }
 
+    // Check quota (for authenticated users)
+    const { userId } = await auth();
+    const user = userId ? await currentUser() : null;
+    const planName = user?.publicMetadata?.plan as string | undefined;
+
+    const quotaRemaining = await hasQuotaRemaining(userId || null, planName);
+    if (!quotaRemaining) {
+      const features = getPlanFeatures(planName);
+      const remaining = await getRemainingQuota(userId || null, planName);
+      throw new ValidationError(
+        `You've reached your monthly limit of ${features.maxDecodesPerMonth} decodes. Please upgrade your plan or wait until next month.`,
+        "quota",
+        {
+          remaining,
+          maxDecodes: features.maxDecodesPerMonth,
+          plan: planName || "free",
+        }
+      );
+    }
+
     // Execute decode flow
     const result = await executeDecodeFlowSafe(body, (progress) => {
       // For MVP, we're doing synchronous execution
@@ -61,6 +84,16 @@ export async function POST(request: Request) {
         )}%)`
       );
     });
+
+    // Consume quota after successful decode
+    if (userId) {
+      try {
+        await consumeDecode(userId);
+      } catch (error) {
+        console.error("Failed to consume quota (non-blocking):", error);
+        // Don't fail the request if quota tracking fails
+      }
+    }
 
     return NextResponse.json({
       status: "ok",

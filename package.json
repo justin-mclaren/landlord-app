@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.58",
+    "@clerk/nextjs": "^6.34.1",
     "@next/font": "^14.2.15",
     "@vercel/kv": "^3.0.0",
     "ai": "^5.0.82",
