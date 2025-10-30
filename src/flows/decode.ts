@@ -1,12 +1,13 @@
 /**
  * Decode Flow
  * Orchestrates the multi-step decode process
- * 
+ *
  * Note: For MVP, this is a simple async function.
  * In production with Vercel Durable Workflows, this would be a workflow.
  */
 import { normalizeInput } from "@/lib/normalize";
 import { getRentCastListing, hasCoreFields } from "@/lib/rentcast";
+import { getScrapedListing, mergeListings } from "@/lib/scrape";
 import { augmentProperty } from "@/lib/augment";
 import { getOrCreateDecoderReport } from "@/lib/decoder";
 import { getOrCreateOGImage } from "@/lib/og-image";
@@ -14,8 +15,6 @@ import { generateSlugFromReport } from "@/lib/slug";
 import { storeSlugMapping } from "@/lib/storage";
 import { addrHash, prefsHash } from "@/lib/hash";
 import type { DecodeFlowInput, DecodeFlowOutput } from "@/types/workflow";
-import type { ListingJSON } from "@/types/listing";
-import type { DecoderReport } from "@/types/report";
 
 export type DecodeStep =
   | "normalize"
@@ -59,7 +58,7 @@ export async function executeDecodeFlow(
     message: "Fetching property data...",
   });
 
-  const listing = await getRentCastListing(
+  let listing = await getRentCastListing(
     normalized.address,
     normalized.sourceMeta.url
   );
@@ -68,7 +67,8 @@ export async function executeDecodeFlow(
     throw new Error("Could not find property listing");
   }
 
-  if (!hasCoreFields(listing)) {
+  // Check if RentCast is missing core fields and try scraping fallback
+  if (!hasCoreFields(listing) && normalized.sourceMeta.url) {
     const { listing: l } = listing;
     const missingFields: string[] = [];
     if (!l.address) missingFields.push("address");
@@ -77,10 +77,45 @@ export async function executeDecodeFlow(
     if (!l.price && l.beds === undefined && l.baths === undefined) {
       missingFields.push("price/beds/baths");
     }
-    throw new Error(
-      `Property listing is missing required fields: ${missingFields.join(", ")}. ` +
-      `Received: ${JSON.stringify({ address: l.address, city: l.city, state: l.state, price: l.price, beds: l.beds, baths: l.baths })}`
-    );
+
+    // Try scraping fallback if enabled
+    if (
+      process.env.FEATURE_SCRAPE_FALLBACK === "true" &&
+      normalized.sourceMeta.url
+    ) {
+      onProgress?.({
+        step: "property",
+        progress: 0.35,
+        message: "Trying scraping fallback...",
+      });
+
+      const scraped = await getScrapedListing(normalized.sourceMeta.url);
+      if (scraped) {
+        // Merge RentCast + scraped data
+        listing = mergeListings(listing, scraped);
+        console.log(
+          `Merged RentCast + scraped data for ${normalized.sourceMeta.url}`
+        );
+      }
+    }
+
+    // Check again after potential merge
+    if (!hasCoreFields(listing)) {
+      const { listing: mergedListing } = listing;
+      throw new Error(
+        `Property listing is missing required fields: ${missingFields.join(
+          ", "
+        )}. ` +
+          `Received: ${JSON.stringify({
+            address: mergedListing.address,
+            city: mergedListing.city,
+            state: mergedListing.state,
+            price: mergedListing.price,
+            beds: mergedListing.beds,
+            baths: mergedListing.baths,
+          })}`
+      );
+    }
   }
 
   // Step 3: Augment Property
@@ -108,9 +143,7 @@ export async function executeDecodeFlow(
     message: "Generating share image...",
   });
 
-  const prefsKeyForOG = input.prefs
-    ? JSON.stringify(input.prefs)
-    : "default";
+  const prefsKeyForOG = input.prefs ? prefsHash(input.prefs) : "default";
   try {
     await getOrCreateOGImage(listing, report, prefsKeyForOG);
   } catch (error) {
@@ -159,4 +192,3 @@ export async function executeDecodeFlowSafe(
     throw error;
   }
 }
-
