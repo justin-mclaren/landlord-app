@@ -5,20 +5,11 @@ import type { DecoderReport } from "@/types/report";
 interface ReportViewProps {
   report: DecoderReport;
   address: string;
-  showWatermark?: boolean;
 }
 
-export function ReportView({ report, address, showWatermark = false }: ReportViewProps) {
+export function ReportView({ report, address }: ReportViewProps) {
   return (
-    <div className="relative min-h-screen bg-white dark:bg-black">
-      {/* Watermark overlay for free users */}
-      {showWatermark && (
-        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center opacity-10">
-          <div className="rotate-[-45deg] text-6xl font-black text-[#DC2626] md:text-8xl">
-            LANDLORD LIES
-          </div>
-        </div>
-      )}
+    <div className="min-h-screen bg-white dark:bg-black">
       <div className="mx-auto max-w-4xl px-4 py-12">
         {/* Header */}
         <div className="mb-8">

@@ -1,66 +1,38 @@
 /**
- * Entitlements & Feature Gating
- * Maps Clerk subscription plans to features and usage limits
+ * Subscription Status Check
+ * Simple helper to check if user has an active subscription via Clerk
  */
 
-export type Plan = "free" | "pro" | "team";
-
-export interface PlanFeatures {
-  plan: Plan;
-  maxDecodesPerMonth: number;
-  watermark: boolean;
-  batchDecode: boolean;
-  priorityQueue: boolean;
-}
-
-export const PLAN_FEATURES: Record<Plan, PlanFeatures> = {
-  free: {
-    plan: "free",
-    maxDecodesPerMonth: 5,
-    watermark: true,
-    batchDecode: false,
-    priorityQueue: false,
-  },
-  pro: {
-    plan: "pro",
-    maxDecodesPerMonth: 200,
-    watermark: false,
-    batchDecode: true,
-    priorityQueue: true,
-  },
-  team: {
-    plan: "team",
-    maxDecodesPerMonth: 1000, // Per seat
-    watermark: false,
-    batchDecode: true,
-    priorityQueue: true,
-  },
-};
+import { currentUser } from "@clerk/nextjs/server";
 
 /**
- * Get plan features for a given plan name
+ * Check if user has an active subscription
+ * Clerk Billing stores subscription status in user metadata
  */
-export function getPlanFeatures(planName: string | null | undefined): PlanFeatures {
-  const normalizedPlan = planName?.toLowerCase() as Plan;
-  return PLAN_FEATURES[normalizedPlan] || PLAN_FEATURES.free;
-}
+export async function hasActiveSubscription(
+  userId: string | null | undefined
+): Promise<boolean> {
+  if (!userId) {
+    return false;
+  }
 
-/**
- * Check if user has a specific feature
- */
-export function hasFeature(
-  planName: string | null | undefined,
-  feature: keyof Omit<PlanFeatures, "plan" | "maxDecodesPerMonth">
-): boolean {
-  const features = getPlanFeatures(planName);
-  return features[feature];
-}
+  try {
+    const user = await currentUser();
+    if (!user) {
+      return false;
+    }
 
-/**
- * Get maximum decodes per month for a plan
- */
-export function getMaxDecodesPerMonth(planName: string | null | undefined): number {
-  const features = getPlanFeatures(planName);
-  return features.maxDecodesPerMonth;
+    // Clerk Billing stores subscription status in publicMetadata
+    // Check for active subscription indicator
+    // This should be set by Clerk webhooks when subscription is active
+    const subscriptionActive = user.publicMetadata?.subscriptionActive as boolean | undefined;
+    
+    // Also check if they have a subscription plan set
+    const hasPlan = !!user.publicMetadata?.plan;
+    
+    return subscriptionActive === true || hasPlan;
+  } catch (error) {
+    console.error("Error checking subscription status:", error);
+    return false; // Default to false on error
+  }
 }
-

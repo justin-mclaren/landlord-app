@@ -5,8 +5,6 @@
  */
 import { ReportView } from "@/components/ReportView";
 import { getSlugMapping } from "@/lib/storage";
-import { currentUser } from "@clerk/nextjs/server";
-import { hasFeature } from "@/lib/entitlements";
 import { notFound } from "next/navigation";
 
 export const revalidate = 86400; // Revalidate every 24 hours
@@ -67,10 +65,6 @@ export default async function ReportPage({
   const { listing, report } = mapping;
   const address = `${listing.listing.address}, ${listing.listing.city}, ${listing.listing.state}`;
 
-  // Check if user has pro plan (no watermark)
-  const user = await currentUser();
-  const planName = user?.publicMetadata?.plan as string | undefined;
-  const showWatermark = !hasFeature(planName, "watermark");
-
-  return <ReportView report={report} address={address} showWatermark={showWatermark} />;
+  // No watermark in freemium model - all reports are the same
+  return <ReportView report={report} address={address} />;
 }

@@ -13,8 +13,8 @@ import {
   getUserMessage,
   getErrorCode,
 } from "@/lib/errors";
-import { hasQuotaRemaining, getRemainingQuota, consumeDecode } from "@/lib/quotas";
-import { getPlanFeatures } from "@/lib/entitlements";
+import { hasUsedFreeCheck, markFreeCheckUsed } from "@/lib/quotas";
+import { hasActiveSubscription } from "@/lib/entitlements";
 
 export async function POST(request: Request) {
   try {
@@ -54,24 +54,35 @@ export async function POST(request: Request) {
       }
     }
 
-    // Check quota (for authenticated users)
+    // Check freemium access - requires authentication
     const { userId } = await auth();
-    const user = userId ? await currentUser() : null;
-    const planName = user?.publicMetadata?.plan as string | undefined;
-
-    const quotaRemaining = await hasQuotaRemaining(userId || null, planName);
-    if (!quotaRemaining) {
-      const features = getPlanFeatures(planName);
-      const remaining = await getRemainingQuota(userId || null, planName);
+    
+    if (!userId) {
       throw new ValidationError(
-        `You've reached your monthly limit of ${features.maxDecodesPerMonth} decodes. Please upgrade your plan or wait until next month.`,
-        "quota",
+        "Please sign in to decode listings. New users get one free check!",
+        "authentication_required",
         {
-          remaining,
-          maxDecodes: features.maxDecodesPerMonth,
-          plan: planName || "free",
+          signInUrl: "/sign-in",
         }
       );
+    }
+    
+    // Check if user has used their free check
+    const usedFreeCheck = await hasUsedFreeCheck(userId);
+    
+    if (usedFreeCheck) {
+      // If they've used free check, require active subscription
+      const hasSubscription = await hasActiveSubscription(userId);
+      
+      if (!hasSubscription) {
+        throw new ValidationError(
+          "You've used your free listing check. Please subscribe to continue decoding listings.",
+          "subscription_required",
+          {
+            upgradeUrl: "/pricing",
+          }
+        );
+      }
     }
 
     // Execute decode flow
@@ -85,14 +96,16 @@ export async function POST(request: Request) {
       );
     });
 
-    // Consume quota after successful decode
-    if (userId) {
-      try {
-        await consumeDecode(userId);
-      } catch (error) {
-        console.error("Failed to consume quota (non-blocking):", error);
-        // Don't fail the request if quota tracking fails
+    // Mark free check as used after successful decode
+    // userId is guaranteed to exist here due to auth check above
+    try {
+      const usedFreeCheck = await hasUsedFreeCheck(userId!);
+      if (!usedFreeCheck) {
+        await markFreeCheckUsed(userId!);
       }
+    } catch (error) {
+      console.error("Failed to mark free check as used (non-blocking):", error);
+      // Don't fail the request if tracking fails
     }
 
     return NextResponse.json({
