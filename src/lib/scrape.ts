@@ -209,6 +209,7 @@ export function mergeListings(
 /**
  * Extract just the address from a Zillow URL
  * Checks cached scraped data first, then tries to get from browser extension cache
+ * If not cached, attempts lightweight server-side fetch to extract address from HTML
  * Returns the address string if found, null otherwise
  *
  * This allows us to derive an address from a Zillow URL and then use it with RentCast
@@ -259,7 +260,113 @@ export async function extractAddressFromZillowUrl(
     return scraped.listing.address;
   }
 
+  // If not in cache, try lightweight server-side fetch to extract address
+  // This is a minimal operation (just fetch HTML and extract address)
+  // Doesn't require full scraping feature flag
+  try {
+    const address = await fetchZillowAddress(url);
+    if (address && isFullAddress(address)) {
+      return address;
+    }
+  } catch (error) {
+    console.warn(`Failed to fetch address from Zillow URL ${url}:`, error);
+  }
+
   return null;
+}
+
+/**
+ * Lightweight fetch of Zillow page HTML to extract address
+ * Only extracts the address, doesn't parse full listing data
+ */
+async function fetchZillowAddress(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const html = await response.text();
+
+    // Try to extract address from common Zillow patterns
+    // Pattern 1: JSON-LD structured data
+    const jsonLdMatch = html.match(
+      /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i
+    );
+    if (jsonLdMatch) {
+      try {
+        const jsonLd = JSON.parse(jsonLdMatch[1]);
+        if (jsonLd.address?.streetAddress) {
+          const address = `${jsonLd.address.streetAddress}, ${jsonLd.address.addressLocality}, ${jsonLd.address.addressRegion}`;
+          if (isFullAddress(address)) {
+            return address;
+          }
+        }
+      } catch {
+        // Continue to try other patterns
+      }
+    }
+
+    // Pattern 2: data-testid="property-address" or similar
+    const addressMatch = html.match(
+      /data-testid=["']property-address["'][^>]*>([^<]+)/i
+    );
+    if (addressMatch) {
+      const address = addressMatch[1].trim();
+      if (isFullAddress(address)) {
+        return address;
+      }
+    }
+
+    // Pattern 3: itemprop="streetAddress" or similar
+    const itempropMatch = html.match(
+      /itemprop=["']streetAddress["'][^>]*content=["']([^"']+)["']/i
+    );
+    if (itempropMatch) {
+      const street = itempropMatch[1].trim();
+      // Try to find city/state nearby
+      const cityStateMatch = html.match(
+        /itemprop=["']addressLocality["'][^>]*content=["']([^"']+)["'][^>]*itemprop=["']addressRegion["'][^>]*content=["']([^"']+)["']/i
+      );
+      if (cityStateMatch) {
+        const address = `${street}, ${cityStateMatch[1]}, ${cityStateMatch[2]}`;
+        if (isFullAddress(address)) {
+          return address;
+        }
+      }
+    }
+
+    // Pattern 4: Look for address in meta tags
+    const metaAddressMatch = html.match(
+      /<meta[^>]*property=["']og:street-address["'][^>]*content=["']([^"']+)["']/i
+    );
+    if (metaAddressMatch) {
+      const street = metaAddressMatch[1].trim();
+      const metaLocalityMatch = html.match(
+        /<meta[^>]*property=["']og:locality["'][^>]*content=["']([^"']+)["']/i
+      );
+      const metaRegionMatch = html.match(
+        /<meta[^>]*property=["']og:region["'][^>]*content=["']([^"']+)["']/i
+      );
+      if (metaLocalityMatch && metaRegionMatch) {
+        const address = `${street}, ${metaLocalityMatch[1]}, ${metaRegionMatch[1]}`;
+        if (isFullAddress(address)) {
+          return address;
+        }
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.warn(`Error fetching Zillow address for ${url}:`, error);
+    return null;
+  }
 }
 
 /**
