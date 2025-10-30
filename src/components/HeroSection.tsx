@@ -156,7 +156,7 @@ export function HeroSection() {
             <img
               src="/landlord-full.svg"
               alt="Landlord Lies mascot"
-              className="h-64 w-auto md:h-80 lg:h-96"
+              className="h-64 w-auto md:h-80 lg:h-96 scale-x-[-1]"
             />
             {/* Speech bubble */}
             <div className="absolute -top-8 left-1/2 -translate-x-1/2 rounded-2xl bg-white px-4 py-2 shadow-lg md:-top-12">
