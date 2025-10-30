@@ -6,13 +6,7 @@
 
 import type { ListingJSON } from "@/types/listing";
 import { urlHash } from "@/lib/hash";
-import {
-  cacheKey,
-  CACHE_PREFIXES,
-  CACHE_TTL,
-  get,
-  set,
-} from "@/lib/cache";
+import { cacheKey, CACHE_PREFIXES, CACHE_TTL, get, set } from "@/lib/cache";
 import { isFullAddress } from "@/lib/normalize";
 
 /**
@@ -263,9 +257,12 @@ export async function extractAddressFromZillowUrl(
   // If not in cache, try lightweight server-side fetch to extract address
   // This is a minimal operation (just fetch HTML and extract address)
   // Doesn't require full scraping feature flag
+  // Note: Zillow often blocks server-side requests with CAPTCHA
+  console.log(`Attempting to fetch address from Zillow URL: ${url}`);
   try {
     const address = await fetchZillowAddress(url);
     if (address && isFullAddress(address)) {
+      console.log(`Successfully extracted address: ${address}`);
       // Cache the extracted address for future use
       // Create a minimal listing structure just for caching
       const minimalListing: ListingJSON = {
@@ -294,9 +291,12 @@ export async function extractAddressFromZillowUrl(
       return address;
     }
   } catch (error) {
-    console.warn(`Failed to fetch address from Zillow URL ${url}:`, error);
+    // If fetch failed (e.g., CAPTCHA), log and return null
+    // The error will be handled by the calling code
+    console.warn(`Failed to fetch address from Zillow URL ${url}:`, error instanceof Error ? error.message : error);
   }
-
+  
+  console.log(`Failed to extract address from Zillow URL: ${url}`);
   return null;
 }
 
@@ -307,21 +307,22 @@ export async function extractAddressFromZillowUrl(
 async function fetchZillowAddress(url: string): Promise<string | null> {
   try {
     console.log(`Fetching Zillow page for address extraction: ${url}`);
-    
+
     // Use a timeout to prevent hanging
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-    
+
     const response = await fetch(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
       },
       signal: controller.signal,
     });
-    
+
     clearTimeout(timeoutId);
 
     if (!response.ok) {
@@ -405,13 +406,17 @@ async function fetchZillowAddress(url: string): Promise<string | null> {
       }
     }
 
-    console.warn("Could not extract address from Zillow HTML using any pattern");
+    console.warn(
+      "Could not extract address from Zillow HTML using any pattern"
+    );
     return null;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       console.warn(`Request timeout fetching Zillow URL: ${url}`);
     } else {
+      // Re-throw the error so it can be handled upstream
       console.error(`Error fetching Zillow address for ${url}:`, error);
+      throw error;
     }
     return null;
   }
@@ -420,7 +425,7 @@ async function fetchZillowAddress(url: string): Promise<string | null> {
 /**
  * Get or create scraped listing data
  * Caches scraped data with short TTL (6 hours)
- * 
+ *
  * Note: Cache reads don't require FEATURE_SCRAPE_FALLBACK.
  *       Only actual scraping operations require the feature flag.
  */
