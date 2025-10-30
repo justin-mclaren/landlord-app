@@ -15,7 +15,7 @@ export function Header() {
             </div>
             <span className="font-title text-xl font-black tracking-tight">
               <span className="text-[#1A1B2E]">LANDLORD</span>{" "}
-              <span className="text-[#FF3366]">LIES</span>
+              <span className="text-[#DC2626]">LIES</span>
             </span>
           </div>
         </Link>
@@ -23,7 +23,7 @@ export function Header() {
         {/* Mobile: Single CTA Button */}
         <Link
           href="/#decode"
-          className="rounded-full bg-[#FF3366] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#FF3366]/90 md:hidden"
+          className="rounded-full bg-[#DC2626] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#DC2626]/90 md:hidden"
         >
           Decode & Listing
         </Link>
@@ -32,25 +32,25 @@ export function Header() {
         <nav className="hidden items-center gap-6 md:flex">
           <Link
             href="/#how-it-works"
-            className="text-sm font-medium text-[#1E1E1E] transition-colors hover:text-[#FF3366]"
+            className="text-sm font-medium text-[#1E1E1E] transition-colors hover:text-[#DC2626]"
           >
             How It Works
           </Link>
           <Link
             href="/leaderboard"
-            className="text-sm font-medium text-[#1E1E1E] transition-colors hover:text-[#FF3366]"
+            className="text-sm font-medium text-[#1E1E1E] transition-colors hover:text-[#DC2626]"
           >
             Leaderboard
           </Link>
           <Link
             href="/pricing"
-            className="text-sm font-medium text-[#1E1E1E] transition-colors hover:text-[#FF3366]"
+            className="text-sm font-medium text-[#1E1E1E] transition-colors hover:text-[#DC2626]"
           >
             Pricing
           </Link>
           <Link
             href="/sign-in"
-            className="text-sm font-medium text-[#1E1E1E] transition-colors hover:text-[#FF3366]"
+            className="text-sm font-medium text-[#1E1E1E] transition-colors hover:text-[#DC2626]"
           >
             Sign in
           </Link>

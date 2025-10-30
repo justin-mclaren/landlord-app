@@ -3,29 +3,27 @@
 :root {
   /* Brand Colors */
   --color-primary-dark: #1A1B2E;
-  --color-accent-red: #FF3366;
+  --color-accent-red: #DC2626;
   --color-cream-bg: #FFF8F0;
   --color-neutral-dark: #1E1E1E;
   
   /* Fonts */
-  --font-title: var(--font-satoshi-black), system-ui, sans-serif;
-  --font-body: var(--font-inter), system-ui, sans-serif;
+  /* Next.js font variables already include fallbacks, so we use them directly */
+  --font-title: var(--font-satoshi-black);
+  --font-body: var(--font-inter);
 }
 
 @theme inline {
   /* Colors */
   --color-primary-dark: #1A1B2E;
-  --color-accent-red: #FF3366;
+  --color-accent-red: #DC2626;
   --color-cream-bg: #FFF8F0;
   --color-neutral-dark: #1E1E1E;
   
   /* Fonts */
-  --font-title: var(--font-satoshi-black), system-ui, sans-serif;
-  --font-body: var(--font-inter), system-ui, sans-serif;
-  
-  /* Custom utility classes */
-  --font-title-family: var(--font-title);
-  --font-body-family: var(--font-body);
+  /* Next.js font variables already include fallbacks */
+  --font-title: var(--font-satoshi-black);
+  --font-body: var(--font-inter);
 }
 
 body {

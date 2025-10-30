@@ -67,8 +67,8 @@ export function HowItWorksSection() {
       description: "Receive a brutally honest report",
       icon: (
         <div className="relative">
-          <div className="h-16 w-16 rounded-full bg-[#FF3366]/10 flex items-center justify-center">
-            <span className="text-3xl font-black text-[#FF3366]">✓</span>
+          <div className="h-16 w-16 rounded-full bg-[#DC2626]/10 flex items-center justify-center">
+            <span className="text-3xl font-black text-[#DC2626]">✓</span>
           </div>
         </div>
       ),

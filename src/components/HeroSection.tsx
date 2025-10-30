@@ -91,7 +91,7 @@ export function HeroSection() {
           <h1 className="mb-4 text-4xl font-black leading-tight text-[#1E1E1E] md:text-5xl lg:text-6xl">
             They said{" "}
             <span className="italic">'Cozy.'</span> We heard{" "}
-            <span className="text-[#FF3366]">'Cramped.'</span>
+            <span className="text-[#DC2626]">'Cramped.'</span>
           </h1>
           <p className="mb-8 text-lg leading-relaxed text-[#1E1E1E] md:text-xl">
             Enter any property address – our AI exposes the truth behind landlord
@@ -106,7 +106,7 @@ export function HeroSection() {
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="Enter property address"
-                className="w-full rounded-2xl border-2 border-[#1E1E1E]/20 bg-white px-6 py-4 pl-12 text-base text-[#1E1E1E] placeholder-[#1E1E1E]/50 focus:border-[#FF3366] focus:outline-none focus:ring-2 focus:ring-[#FF3366]/20"
+                className="w-full rounded-2xl border-2 border-[#1E1E1E]/20 bg-white px-6 py-4 pl-12 text-base text-[#1E1E1E] placeholder-[#1E1E1E]/50 focus:border-[#DC2626] focus:outline-none focus:ring-2 focus:ring-[#DC2626]/20"
                 disabled={loading}
                 required
               />
@@ -128,7 +128,7 @@ export function HeroSection() {
             </div>
 
             {error && (
-              <div className="rounded-xl border-2 border-[#FF3366]/30 bg-[#FF3366]/10 p-4 text-sm text-[#FF3366]">
+              <div className="rounded-xl border-2 border-[#DC2626]/30 bg-[#DC2626]/10 p-4 text-sm text-[#DC2626]">
                 {error}
               </div>
             )}
@@ -136,7 +136,7 @@ export function HeroSection() {
             <button
               type="submit"
               disabled={loading || !address}
-              className="w-full rounded-2xl bg-[#FF3366] px-8 py-4 text-lg font-semibold text-white transition-all hover:bg-[#FF3366]/90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-2xl bg-[#DC2626] px-8 py-4 text-lg font-semibold text-white transition-all hover:bg-[#DC2626]/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "Decoding..." : "Decode this listing"}
             </button>
@@ -144,7 +144,7 @@ export function HeroSection() {
 
           <Link
             href="#sample-decodes"
-            className="text-sm font-medium text-[#1E1E1E] underline-offset-4 hover:text-[#FF3366] hover:underline"
+            className="text-sm font-medium text-[#1E1E1E] underline-offset-4 hover:text-[#DC2626] hover:underline"
           >
             See sample decodes
           </Link>

@@ -14,7 +14,7 @@ function SampleDecodeCard({
   weFound,
 }: SampleDecodeCardProps) {
   return (
-    <div className="group relative overflow-hidden rounded-2xl border-2 border-[#1E1E1E]/10 bg-white transition-all hover:border-[#FF3366]/30 hover:shadow-lg">
+    <div className="group relative overflow-hidden rounded-2xl border-2 border-[#1E1E1E]/10 bg-white transition-all hover:border-[#DC2626]/30 hover:shadow-lg">
       {/* Image Container */}
       <div className="relative aspect-[4/3] overflow-hidden bg-[#1E1E1E]/5">
         <img
@@ -23,7 +23,7 @@ function SampleDecodeCard({
           className="h-full w-full object-cover"
         />
         {/* Lie Meter Badge */}
-        <div className="absolute left-4 top-4 rounded-lg bg-[#FF3366] px-3 py-1.5">
+        <div className="absolute left-4 top-4 rounded-lg bg-[#DC2626] px-3 py-1.5">
           <span className="text-xs font-bold text-white">
             LIE METER {lieMeterScore}/100
           </span>
@@ -38,7 +38,7 @@ function SampleDecodeCard({
         </div>
         <div>
           <p className="text-sm font-medium text-[#1E1E1E]/60">We found</p>
-          <p className="text-lg font-semibold text-[#FF3366]">{weFound}</p>
+          <p className="text-lg font-semibold text-[#DC2626]">{weFound}</p>
         </div>
       </div>
     </div>
