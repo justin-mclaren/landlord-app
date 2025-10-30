@@ -10,6 +10,16 @@ import { notFound } from "next/navigation";
 export const revalidate = 86400; // Revalidate every 24 hours
 export const dynamic = "force-dynamic"; // Changed to dynamic to fetch from KV
 
+/**
+ * Set CDN cache headers for report pages
+ * Allows long-term caching with stale-while-revalidate for better performance
+ */
+export async function headers() {
+  return {
+    "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800",
+  };
+}
+
 export async function generateMetadata({
   params,
 }: {
