@@ -60,7 +60,11 @@ async function fetchRentCastRaw(
   }
 
   // RentCast API endpoint for property search
-  const url = `${RENTCAST_API_BASE}/properties`;
+  // Build URL with address as query parameter
+  const urlParams = new URLSearchParams({
+    address: address,
+  });
+  const url = `${RENTCAST_API_BASE}/properties?${urlParams.toString()}`;
   
   // Try by address first
   let response: Response | null = null;
@@ -74,8 +78,6 @@ async function fetchRentCastRaw(
           "X-Api-Key": apiKey,
           "Content-Type": "application/json",
         },
-        // Add address as query parameter - adjust based on RentCast API docs
-        // This is a placeholder - need to check actual RentCast API format
         next: { revalidate: CACHE_TTL.RENTCAST },
       });
 
@@ -99,17 +101,35 @@ async function fetchRentCastRaw(
           continue;
         }
         // Client error (4xx) - don't retry
-        throw new Error(`RentCast API error: ${response.status} ${response.statusText}`);
+        // Try to get error message from response body
+        let errorMessage = `${response.status} ${response.statusText}`;
+        try {
+          const errorData = await response.clone().json();
+          if (errorData.message || errorData.error) {
+            errorMessage += `: ${errorData.message || errorData.error}`;
+          }
+        } catch {
+          // Ignore JSON parse errors
+        }
+        throw new Error(`RentCast API error: ${errorMessage}`);
       }
 
       const data = await response.json();
       
       // RentCast may return an array or single object
       // Adjust based on actual API response format
-      if (Array.isArray(data) && data.length > 0) {
-        return data[0] as RentCastResponse;
+      if (Array.isArray(data)) {
+        if (data.length > 0) {
+          return data[0] as RentCastResponse;
+        }
+        // Empty array means no results found
+        return null;
       }
       if (data && typeof data === "object") {
+        // Check if it's an error response
+        if (data.error || data.message) {
+          throw new Error(`RentCast API error: ${data.error || data.message}`);
+        }
         return data as RentCastResponse;
       }
       
@@ -130,8 +150,19 @@ async function fetchRentCastRaw(
  */
 function normalizeRentCastResponse(
   response: RentCastResponse,
-  url?: string
+  url?: string,
+  inputAddress?: string
 ): ListingJSON {
+  // Build address from available fields or use input address as fallback
+  let address = response.address;
+  if (!address && inputAddress) {
+    // Use input address if RentCast doesn't provide it
+    address = inputAddress;
+  } else if (!address && response.city && response.state) {
+    // Build minimal address from city/state if we have them
+    address = `${response.city}, ${response.state}`;
+  }
+  
   return {
     source: {
       url,
@@ -140,7 +171,7 @@ function normalizeRentCastResponse(
       version: "v1",
     },
     listing: {
-      address: response.address,
+      address: address || "Unknown Address",
       city: response.city,
       state: response.state,
       zip: response.zipCode,
@@ -180,8 +211,8 @@ export async function getRentCastListing(
       const response = await fetchRentCastRaw(address);
       if (!response) return null;
       
-      // Cache the raw response
-      return normalizeRentCastResponse(response, url);
+      // Cache the raw response, passing input address as fallback
+      return normalizeRentCastResponse(response, url, address);
     }
   );
 

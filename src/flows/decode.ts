@@ -69,7 +69,18 @@ export async function executeDecodeFlow(
   }
 
   if (!hasCoreFields(listing)) {
-    throw new Error("Property listing is missing required fields");
+    const { listing: l } = listing;
+    const missingFields: string[] = [];
+    if (!l.address) missingFields.push("address");
+    if (!l.city) missingFields.push("city");
+    if (!l.state) missingFields.push("state");
+    if (!l.price && l.beds === undefined && l.baths === undefined) {
+      missingFields.push("price/beds/baths");
+    }
+    throw new Error(
+      `Property listing is missing required fields: ${missingFields.join(", ")}. ` +
+      `Received: ${JSON.stringify({ address: l.address, city: l.city, state: l.state, price: l.price, beds: l.beds, baths: l.baths })}`
+    );
   }
 
   // Step 3: Augment Property
@@ -90,7 +101,7 @@ export async function executeDecodeFlow(
 
   const report = await getOrCreateDecoderReport(listing, augment, input.prefs);
 
-  // Step 5: Generate OG Image
+  // Step 5: Generate OG Image (optional - skip if font loading fails)
   onProgress?.({
     step: "og_image",
     progress: 0.85,
@@ -100,7 +111,12 @@ export async function executeDecodeFlow(
   const prefsKeyForOG = input.prefs
     ? JSON.stringify(input.prefs)
     : "default";
-  await getOrCreateOGImage(listing, report, prefsKeyForOG);
+  try {
+    await getOrCreateOGImage(listing, report, prefsKeyForOG);
+  } catch (error) {
+    console.warn("OG image generation failed (non-blocking):", error);
+    // Continue without OG image - it's optional for MVP
+  }
 
   // Step 6: Publish (Generate Slug)
   onProgress?.({

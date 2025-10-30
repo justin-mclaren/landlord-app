@@ -12,15 +12,38 @@ const DECODER_CONFIG_VERSION = "v1";
 
 /**
  * Load font for Satori rendering
- * We'll use a system font fallback for MVP
+ * Loads Inter font as TTF (Satori requires TTF/OTF, not WOFF2)
+ * For MVP, we'll use a CDN-hosted TTF font
  */
 async function loadFont(): Promise<ArrayBuffer> {
-  // For MVP, we'll use a fallback approach
-  // In production, you'd load a proper font file (e.g., Inter, Roboto)
-  // For now, Satori can use system fonts
-  
-  // Return empty array buffer - Satori will use fallback fonts
-  return new ArrayBuffer(0);
+  try {
+    // Try multiple font sources for reliability
+    const fontUrls = [
+      "https://cdn.jsdelivr.net/npm/inter-ui@3.19.0/font-files/Inter-Regular.ttf",
+      "https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiJ-Ek-_EeA.ttf",
+      "https://github.com/rsms/inter/raw/master/docs/font-files/Inter-Regular.ttf",
+    ];
+
+    for (const fontUrl of fontUrls) {
+      try {
+        const response = await fetch(fontUrl);
+        if (response.ok) {
+          return await response.arrayBuffer();
+        }
+      } catch (e) {
+        // Try next URL
+        continue;
+      }
+    }
+
+    throw new Error("All font URLs failed");
+  } catch (error) {
+    console.error("Failed to load font:", error);
+    // For production, bundle the font file in the project
+    throw new Error(
+      "Font loading failed - Satori requires at least one TTF/OTF font. Consider bundling a font file."
+    );
+  }
 }
 
 /**
@@ -33,10 +56,13 @@ async function generateOGImageSVG(
   const { listing: l } = listing;
   const address = `${l.address}, ${l.city}, ${l.state}`;
   const score = report.scorecard.total;
-  
+
   // Get top 2 red flags
   const topRedFlags = report.red_flags.slice(0, 2);
   const topPositive = report.positives[0];
+
+  // Load font for Satori
+  const fontData = await loadFont();
 
   // Satori accepts VNode-like structures, TypeScript types are strict
   // @ts-ignore - Satori accepts this structure at runtime
@@ -71,7 +97,12 @@ async function generateOGImageSVG(
                     style: {
                       fontSize: "120px",
                       fontWeight: "bold",
-                      color: score >= 70 ? "#059669" : score >= 50 ? "#f59e0b" : "#dc2626",
+                      color:
+                        score >= 70
+                          ? "#059669"
+                          : score >= 50
+                          ? "#f59e0b"
+                          : "#dc2626",
                       lineHeight: "1",
                     },
                     children: score.toString(),
@@ -224,7 +255,8 @@ async function generateOGImageSVG(
                             fontSize: "18px",
                             color: "#14532d",
                           },
-                          children: topPositive.description.slice(0, 100) + "...",
+                          children:
+                            topPositive.description.slice(0, 100) + "...",
                         },
                       },
                     ],
@@ -239,7 +271,14 @@ async function generateOGImageSVG(
     {
       width: 1200,
       height: 630,
-      fonts: [],
+      fonts: [
+        {
+          name: "Inter",
+          data: fontData,
+          weight: 400,
+          style: "normal",
+        },
+      ],
     }
   );
 
@@ -281,4 +320,3 @@ export async function getOrCreateOGImage(
     }
   );
 }
-

@@ -1,8 +1,13 @@
 /**
- * Cache utilities using Vercel Data Cache
- * Provides idempotent read-through caching
+ * Cache utilities using Vercel KV for persistent storage
+ * Provides idempotent read-through caching across requests
+ * 
+ * Strategy:
+ * - Use Vercel KV for expensive operations (RentCast API, AI reports, augmentations)
+ * - Prevents duplicate API calls and saves costs
+ * - Cache keys are content-addressed for idempotency
  */
-import { unstable_cache } from "next/cache";
+import { kv } from "@vercel/kv";
 
 // Cache TTL constants (in seconds)
 export const CACHE_TTL = {
@@ -15,11 +20,8 @@ export const CACHE_TTL = {
 } as const;
 
 /**
- * Get or set a cached value
- * Uses Next.js unstable_cache for server-side caching
- * 
- * Note: unstable_cache only works in Server Components and Route Handlers
- * For edge runtime or client-side, consider using @vercel/kv
+ * Get or set a cached value using Vercel KV
+ * Uses KV for persistent storage across requests
  * 
  * @param key - Cache key (should include version suffix like :v1)
  * @param ttl - Time to live in seconds
@@ -31,27 +33,70 @@ export async function getOrSet<T>(
   ttl: number,
   fetcher: () => Promise<T>
 ): Promise<T> {
-  // Use Next.js unstable_cache for server-side caching
-  // This caches at the request level during build/render
-  const cached = unstable_cache(
-    fetcher,
-    [key],
-    {
-      revalidate: ttl,
-      tags: [`cache:${key}`],
+  try {
+    // Try to get from KV first
+    // KV handles JSON serialization automatically
+    const cached = await kv.get<T>(key);
+    if (cached !== null) {
+      return cached;
     }
-  );
-
-  return cached();
+    
+    // Not in cache, fetch new value
+    const value = await fetcher();
+    
+    // Store in KV with TTL
+    // KV accepts objects directly and handles serialization
+    await kv.set(key, value, { ex: ttl });
+    
+    return value;
+  } catch (error) {
+    // If KV is not configured or fails, fall back to fetching
+    // This allows graceful degradation
+    console.warn(`KV cache error for key ${key}, falling back to direct fetch:`, error);
+    return await fetcher();
+  }
 }
 
 /**
- * Invalidate cache by tag
- * Note: This requires revalidateTag from next/cache
+ * Get a cached value without setting
+ * Returns null if not found
  */
-export async function invalidateCache(tag: string): Promise<void> {
-  const { revalidateTag } = await import("next/cache");
-  revalidateTag(tag);
+export async function get<T>(key: string): Promise<T | null> {
+  try {
+    // KV handles JSON serialization automatically
+    const cached = await kv.get<T>(key);
+    return cached;
+  } catch (error) {
+    console.warn(`KV get error for key ${key}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Set a cached value
+ */
+export async function set<T>(
+  key: string,
+  value: T,
+  options: { ttl: number }
+): Promise<void> {
+  try {
+    // KV accepts objects directly and handles serialization
+    await kv.set(key, value, { ex: options.ttl });
+  } catch (error) {
+    console.warn(`KV set error for key ${key}:`, error);
+  }
+}
+
+/**
+ * Invalidate cache by key
+ */
+export async function invalidateCache(key: string): Promise<void> {
+  try {
+    await kv.del(key);
+  } catch (error) {
+    console.warn(`KV delete error for key ${key}:`, error);
+  }
 }
 
 /**

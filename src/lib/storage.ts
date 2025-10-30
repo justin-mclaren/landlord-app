@@ -1,13 +1,13 @@
 /**
  * Storage layer for slug mappings
- * Uses Next.js cache to store slug → report data mappings
+ * Uses Vercel KV for persistent storage across requests
  * 
  * Approach:
- * - Store full report data keyed by slug using Next.js cache
+ * - Store full report data keyed by slug using Vercel KV
  * - Pages are cached via ISR (revalidate)
- * - Reports persist in cache for 7 days
+ * - Reports persist in KV for 7 days
  */
-import { getOrSet, cacheKey, CACHE_TTL } from "./cache";
+import { kv } from "@vercel/kv";
 import type { ListingJSON } from "@/types/listing";
 import type { DecoderReport } from "@/types/report";
 
@@ -28,13 +28,12 @@ export async function storeSlugMapping(
   listing: ListingJSON,
   report: DecoderReport
 ): Promise<void> {
-  // Store the full data using our cache system
-  // The cache key includes the slug, so it's retrievable by slug
-  await getOrSet(
-    cacheKey("slug:full", slug, "v1"),
-    CACHE_TTL.REPORT,
-    async () => ({ listing, report })
-  );
+  const key = `slug:full:${slug}:v1`;
+  const data = { listing, report };
+  
+  // Store in KV with 7 day TTL (in seconds)
+  // KV accepts objects directly and handles serialization
+  await kv.set(key, data, { ex: 7 * 24 * 60 * 60 });
 }
 
 /**
@@ -44,15 +43,16 @@ export async function storeSlugMapping(
 export async function getSlugMapping(
   slug: string
 ): Promise<{ listing: ListingJSON; report: DecoderReport } | null> {
-  // Try to get from cache
-  // If not found, the fetcher returns null
-  const data = await getOrSet(
-    cacheKey("slug:full", slug, "v1"),
-    CACHE_TTL.REPORT,
-    async () => null
-  );
+  const key = `slug:full:${slug}:v1`;
   
-  return data === null ? null : data;
+  try {
+    // KV handles JSON serialization automatically
+    const data = await kv.get<{ listing: ListingJSON; report: DecoderReport }>(key);
+    return data || null;
+  } catch (error) {
+    console.error("Error fetching slug mapping from KV:", error);
+    return null;
+  }
 }
 
 /**

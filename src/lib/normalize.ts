@@ -20,16 +20,38 @@ function extractAddressFromUrl(url: string): string | null {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname.toLowerCase();
 
-    // Zillow: usually has address in path or query params
+    // Zillow: multiple URL patterns
     if (hostname.includes("zillow.com")) {
-      // Try to extract from pathname like /homedetails/123-Main-St-City-ST-12345/...
-      const pathMatch = urlObj.pathname.match(/\/([^/]+)\/[^/]+$/);
-      if (pathMatch) {
-        // Decode and format address
-        const addressPart = decodeURIComponent(pathMatch[1])
+      // Pattern 1: /homedetails/123-Main-St-City-ST-12345/...
+      const homedetailsMatch = urlObj.pathname.match(/\/homedetails\/([^/]+)/);
+      if (homedetailsMatch) {
+        const addressPart = decodeURIComponent(homedetailsMatch[1])
           .replace(/-/g, " ")
           .trim();
         return addressPart;
+      }
+
+      // Pattern 2: /apartments/city-state/property-name/ID/
+      // For apartment listings, address isn't in URL - need to scrape or use address param
+      // Check query params for address
+      const addressParam = urlObj.searchParams.get("address") || urlObj.searchParams.get("addr");
+      if (addressParam) {
+        return addressParam;
+      }
+
+      // Pattern 3: Try to extract city/state from path as fallback
+      // /apartments/costa-mesa-ca/... -> "Costa Mesa, CA"
+      const apartmentsMatch = urlObj.pathname.match(/\/apartments\/([^/]+)/);
+      if (apartmentsMatch) {
+        const cityState = apartmentsMatch[1]
+          .replace(/-/g, " ")
+          .replace(/\bca\b/i, "CA")
+          .replace(/\bny\b/i, "NY")
+          .replace(/\btx\b/i, "TX")
+          .trim();
+        // Return partial address (city, state) - will need full address from RentCast or scraping
+        // For now, return null to trigger scraping fallback
+        return null;
       }
     }
 
