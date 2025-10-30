@@ -333,6 +333,16 @@ async function fetchZillowAddress(url: string): Promise<string | null> {
     const html = await response.text();
     console.log(`Fetched ${html.length} bytes from Zillow page`);
 
+    // Check if Zillow returned a CAPTCHA page instead of the property page
+    if (html.includes("px-captcha") || html.includes("Before we continue") || html.includes("Press & Hold")) {
+      console.warn(`Zillow returned CAPTCHA page for ${url} - server-side scraping blocked`);
+      throw new Error(
+        "Zillow blocked the request with a CAPTCHA. " +
+        "Server-side scraping is not available for Zillow URLs. " +
+        "Please use a browser extension to scrape the page, or enable scraping fallback with a scraping service."
+      );
+    }
+
     // Try to extract address from common Zillow patterns
     // Pattern 1: JSON-LD structured data
     const jsonLdMatch = html.match(
@@ -413,12 +423,12 @@ async function fetchZillowAddress(url: string): Promise<string | null> {
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       console.warn(`Request timeout fetching Zillow URL: ${url}`);
+      return null;
     } else {
       // Re-throw the error so it can be handled upstream
       console.error(`Error fetching Zillow address for ${url}:`, error);
       throw error;
     }
-    return null;
   }
 }
 
