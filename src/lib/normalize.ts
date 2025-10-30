@@ -43,15 +43,34 @@ function extractAddressFromUrl(url: string): string | null {
       // /apartments/costa-mesa-ca/... -> "Costa Mesa, CA"
       const apartmentsMatch = urlObj.pathname.match(/\/apartments\/([^/]+)/);
       if (apartmentsMatch) {
-        const cityState = apartmentsMatch[1]
+        const cityStatePart = apartmentsMatch[1]
           .replace(/-/g, " ")
+          .trim();
+        
+        // Try to extract and format city/state
+        // Pattern: "costa mesa ca" -> "Costa Mesa, CA"
+        const cityStateMatch = cityStatePart.match(/^(.+?)\s+([a-z]{2})$/i);
+        if (cityStateMatch) {
+          const city = cityStateMatch[1]
+            .split(/\s+/)
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(" ");
+          const state = cityStateMatch[2].toUpperCase();
+          return `${city}, ${state}`;
+        }
+        
+        // Fallback: return as-is with state abbreviations
+        const cityState = cityStatePart
           .replace(/\bca\b/i, "CA")
           .replace(/\bny\b/i, "NY")
           .replace(/\btx\b/i, "TX")
+          .replace(/\bfl\b/i, "FL")
+          .replace(/\bil\b/i, "IL")
+          .replace(/\bwa\b/i, "WA")
+          .replace(/\bor\b/i, "OR")
+          .replace(/\baz\b/i, "AZ")
           .trim();
-        // Return partial address (city, state) - will need full address from RentCast or scraping
-        // For now, return null to trigger scraping fallback
-        return null;
+        return cityState;
       }
     }
 
@@ -186,8 +205,17 @@ export async function normalizeInput(input: {
       };
     }
     
-    // If we can't extract, throw error
-    throw new Error("Could not extract address from URL");
+    // If we can't extract, allow partial address (city/state) to proceed
+    // The decode flow will try RentCast first, then scraping fallback
+    // This allows apartment URLs where address isn't in the URL path
+    return {
+      address: "", // Empty address - will be filled by RentCast or scraping
+      sourceMeta: {
+        url: input.url,
+        input_type: "url",
+        parsed_from_url: false,
+      },
+    };
   }
 
   if (input.address) {

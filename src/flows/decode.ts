@@ -15,6 +15,7 @@ import { generateSlugFromReport } from "@/lib/slug";
 import { storeSlugMapping } from "@/lib/storage";
 import { addrHash, prefsHash } from "@/lib/hash";
 import type { DecodeFlowInput, DecodeFlowOutput } from "@/types/workflow";
+import type { ListingJSON } from "@/types/listing";
 
 export type DecodeStep =
   | "normalize"
@@ -58,17 +59,32 @@ export async function executeDecodeFlow(
     message: "Fetching property data...",
   });
 
-  let listing = await getRentCastListing(
-    normalized.address,
-    normalized.sourceMeta.url
-  );
+  let listing: ListingJSON | null = null;
 
-  if (!listing) {
-    throw new Error("Could not find property listing");
+  // If we have a URL but no address extracted, try scraping first
+  if (normalized.sourceMeta.url && !normalized.address && process.env.FEATURE_SCRAPE_FALLBACK === "true") {
+    onProgress?.({
+      step: "property",
+      progress: 0.32,
+      message: "Checking scraped data...",
+    });
+    
+    const scraped = await getScrapedListing(normalized.sourceMeta.url);
+    if (scraped && hasCoreFields(scraped)) {
+      listing = scraped;
+    }
   }
 
-  // Check if RentCast is missing core fields and try scraping fallback
-  if (!hasCoreFields(listing) && normalized.sourceMeta.url) {
+  // Try RentCast if we have an address or if scraping didn't work
+  if (!listing && normalized.address) {
+    listing = await getRentCastListing(
+      normalized.address,
+      normalized.sourceMeta.url
+    );
+  }
+
+  // If RentCast returned something but missing fields, try scraping fallback
+  if (listing && !hasCoreFields(listing) && normalized.sourceMeta.url) {
     const { listing: l } = listing;
     const missingFields: string[] = [];
     if (!l.address) missingFields.push("address");
@@ -116,6 +132,38 @@ export async function executeDecodeFlow(
           })}`
       );
     }
+  }
+
+  // Final check: if we still don't have a listing, try scraping as last resort
+  if (!listing && normalized.sourceMeta.url && process.env.FEATURE_SCRAPE_FALLBACK === "true") {
+    onProgress?.({
+      step: "property",
+      progress: 0.38,
+      message: "Trying scraping fallback...",
+    });
+
+    listing = await getScrapedListing(normalized.sourceMeta.url);
+  }
+
+  if (!listing) {
+    throw new Error(
+      `Could not find property listing. ${normalized.sourceMeta.url ? "Try enabling scraping fallback (FEATURE_SCRAPE_FALLBACK=true) or provide the full address." : "Please provide a valid URL or address."}`
+    );
+  }
+
+  if (!hasCoreFields(listing)) {
+    const { listing: l } = listing;
+    throw new Error(
+      `Property listing is missing required fields. ` +
+        `Received: ${JSON.stringify({
+          address: l.address,
+          city: l.city,
+          state: l.state,
+          price: l.price,
+          beds: l.beds,
+          baths: l.baths,
+        })}`
+    );
   }
 
   // Step 3: Augment Property
