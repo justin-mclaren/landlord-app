@@ -10,6 +10,7 @@ import type { DecoderReport } from "@/types/report";
 import type { DecoderPrefs } from "@/types/workflow";
 import { getOrSet, cacheKey, CACHE_PREFIXES, CACHE_TTL } from "./cache";
 import { addrHash, prefsHash, reportHash } from "./hash";
+import { APIError, ParseError, ConfigurationError } from "./errors";
 
 const DECODER_MODEL = process.env.DECODER_MODEL ?? "gpt-4o-mini";
 const DECODER_CONFIG_VERSION = "v1";
@@ -121,7 +122,15 @@ function parseDecoderResponse(text: string): DecoderReport {
     return report;
   } catch (error) {
     console.error("Failed to parse decoder response:", error);
-    throw new Error("Invalid decoder response format");
+    throw new ParseError(
+      "Invalid decoder response format",
+      "decoder_response",
+      {
+        originalError: error instanceof Error ? error.message : String(error),
+        responseLength: text.length,
+        responsePreview: text.slice(0, 200),
+      }
+    );
   }
 }
 
@@ -133,6 +142,13 @@ async function generateDecoderReportRaw(
   augment: AugmentJSON,
   prefs?: DecoderPrefs
 ): Promise<DecoderReport> {
+  // Check for API key
+  if (!process.env.OPENAI_API_KEY) {
+    throw new ConfigurationError("OPENAI_API_KEY", {
+      address: listing.listing.address,
+    });
+  }
+
   const prompt = buildPrompt(listing, augment, prefs);
   const model = openai(DECODER_MODEL);
 
@@ -151,25 +167,48 @@ async function generateDecoderReportRaw(
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       
+      // Check if it's a rate limit or server error
+      const errorMessage = lastError.message.toLowerCase();
+      const isRateLimit = errorMessage.includes("429") || errorMessage.includes("rate limit");
+      const isServerError = errorMessage.includes("500") || errorMessage.includes("502") || errorMessage.includes("503");
+      
       // Retry on rate limits (429) or server errors (5xx)
-      if (attempt < maxRetries) {
-        const isRateLimit = error instanceof Error && error.message.includes("429");
-        const isServerError = error instanceof Error && error.message.includes("5");
-        
-        if (isRateLimit || isServerError) {
-          // Exponential backoff
-          await new Promise((resolve) =>
-            setTimeout(resolve, Math.pow(2, attempt) * 1000)
-          );
-          continue;
-        }
+      if (attempt < maxRetries && (isRateLimit || isServerError)) {
+        // Exponential backoff
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.pow(2, attempt) * 1000)
+        );
+        continue;
       }
       
-      throw lastError;
+      // Don't retry - throw API error
+      if (isRateLimit) {
+        throw new APIError("OpenAI", "Rate limit exceeded", lastError, 429, {
+          model: DECODER_MODEL,
+          attempt,
+        });
+      }
+      
+      throw new APIError(
+        "OpenAI",
+        lastError.message,
+        lastError,
+        isServerError ? 502 : 500,
+        {
+          model: DECODER_MODEL,
+          attempt,
+        }
+      );
     }
   }
 
-  throw lastError || new Error("Failed to generate decoder report");
+  throw new APIError(
+    "OpenAI",
+    lastError?.message || "Failed to generate decoder report after retries",
+    lastError || undefined,
+    502,
+    { model: DECODER_MODEL }
+  );
 }
 
 /**

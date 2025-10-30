@@ -5,6 +5,13 @@
 import type { ListingJSON } from "@/types/listing";
 import { getOrSet, cacheKey, CACHE_PREFIXES, CACHE_TTL } from "./cache";
 import { addrHash } from "./hash";
+import {
+  APIError,
+  RateLimitError,
+  ConfigurationError,
+  NotFoundError,
+  TimeoutError,
+} from "./errors";
 
 const RENTCAST_API_BASE = "https://api.rentcast.io/v1";
 
@@ -56,7 +63,7 @@ async function fetchRentCastRaw(
 ): Promise<RentCastResponse | null> {
   const apiKey = process.env.RENTCAST_API_KEY;
   if (!apiKey) {
-    throw new Error("RENTCAST_API_KEY environment variable is not set");
+    throw new ConfigurationError("RENTCAST_API_KEY", { address });
   }
 
   // RentCast API endpoint for property search
@@ -84,34 +91,60 @@ async function fetchRentCastRaw(
       // Handle rate limiting (429)
       if (response.status === 429) {
         const retryAfter = response.headers.get("Retry-After");
-        if (retryAfter) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, parseInt(retryAfter) * 1000)
-          );
+        const retryAfterSeconds = retryAfter ? parseInt(retryAfter) : undefined;
+        
+        if (attempt < RETRY_CONFIG.maxRetries - 1) {
+          if (retryAfterSeconds) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, retryAfterSeconds * 1000)
+            );
+          } else {
+            await delay(attempt);
+          }
+          continue; // Retry
         } else {
-          await delay(attempt);
+          // Max retries reached
+          throw new RateLimitError("RentCast", retryAfterSeconds, { address });
         }
-        continue; // Retry
       }
 
       if (!response.ok) {
         if (response.status >= 500) {
           // Server error - retry
-          await delay(attempt);
-          continue;
+          if (attempt < RETRY_CONFIG.maxRetries - 1) {
+            await delay(attempt);
+            continue;
+          }
+          // Max retries reached
+          let errorMessage = `${response.status} ${response.statusText}`;
+          try {
+            const errorData = await response.clone().json();
+            if (errorData.message || errorData.error) {
+              errorMessage = errorData.message || errorData.error;
+            }
+          } catch {
+            // Ignore JSON parse errors
+          }
+          throw new APIError("RentCast", errorMessage, undefined, response.status, { address });
         }
+        
         // Client error (4xx) - don't retry
-        // Try to get error message from response body
+        if (response.status === 404) {
+          // Property not found
+          return null;
+        }
+        
+        // Other 4xx errors
         let errorMessage = `${response.status} ${response.statusText}`;
         try {
           const errorData = await response.clone().json();
           if (errorData.message || errorData.error) {
-            errorMessage += `: ${errorData.message || errorData.error}`;
+            errorMessage = errorData.message || errorData.error;
           }
         } catch {
           // Ignore JSON parse errors
         }
-        throw new Error(`RentCast API error: ${errorMessage}`);
+        throw new APIError("RentCast", errorMessage, undefined, response.status, { address });
       }
 
       const data = await response.json();
@@ -128,13 +161,29 @@ async function fetchRentCastRaw(
       if (data && typeof data === "object") {
         // Check if it's an error response
         if (data.error || data.message) {
-          throw new Error(`RentCast API error: ${data.error || data.message}`);
+          throw new APIError(
+            "RentCast",
+            data.error || data.message,
+            undefined,
+            response.status,
+            { address }
+          );
         }
         return data as RentCastResponse;
       }
       
       return null;
     } catch (error) {
+      // Don't retry non-retryable errors
+      if (
+        error instanceof APIError &&
+        error.statusCode >= 400 &&
+        error.statusCode < 500 &&
+        error.statusCode !== 429
+      ) {
+        throw error;
+      }
+      
       lastError = error instanceof Error ? error : new Error(String(error));
       if (attempt < RETRY_CONFIG.maxRetries - 1) {
         await delay(attempt);
@@ -142,7 +191,18 @@ async function fetchRentCastRaw(
     }
   }
 
-  throw lastError || new Error("Failed to fetch from RentCast API");
+  // If we get here, all retries failed
+  if (lastError instanceof APIError || lastError instanceof RateLimitError) {
+    throw lastError;
+  }
+  
+  throw new APIError(
+    "RentCast",
+    lastError?.message || "Failed to fetch from RentCast API after retries",
+    lastError || undefined,
+    502,
+    { address }
+  );
 }
 
 /**

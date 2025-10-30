@@ -28,8 +28,44 @@ export function DecodeForm() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to decode listing");
+        let errorMessage = "Failed to decode listing";
+        let errorCode: string | undefined;
+        
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+          errorCode = errorData.code;
+          
+          // Provide more specific error messages based on error code
+          if (errorCode === "VALIDATION_ERROR") {
+            errorMessage = errorData.error || "Please check your input and try again.";
+          } else if (errorCode === "NOT_FOUND") {
+            errorMessage = errorData.error || "We couldn't find that property. Please check the address.";
+          } else if (errorCode === "DATA_QUALITY_ERROR") {
+            errorMessage = errorData.error || "The property data is incomplete. We couldn't generate a full report.";
+          } else if (errorCode === "RATE_LIMIT_ERROR") {
+            errorMessage = errorData.error || "Too many requests. Please wait a moment and try again.";
+          } else if (errorCode === "API_ERROR") {
+            errorMessage = errorData.error || "We're having trouble fetching data. Please try again.";
+          } else if (errorCode === "NETWORK_ERROR") {
+            errorMessage = errorData.error || "Network connection failed. Please check your connection.";
+          } else if (errorCode === "TIMEOUT_ERROR") {
+            errorMessage = errorData.error || "The request took too long. Please try again.";
+          }
+        } catch {
+          // If JSON parsing fails, use status-based messages
+          if (response.status === 400) {
+            errorMessage = "Invalid input. Please check your address and try again.";
+          } else if (response.status === 404) {
+            errorMessage = "Property not found. Please check the address.";
+          } else if (response.status === 429) {
+            errorMessage = "Too many requests. Please wait a moment and try again.";
+          } else if (response.status >= 500) {
+            errorMessage = "Server error. Please try again later.";
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -37,9 +73,11 @@ export function DecodeForm() {
       // Redirect to report page
       if (data.url) {
         window.location.href = data.url;
+      } else {
+        throw new Error("No report URL returned from server");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      setError(err instanceof Error ? err.message : "An unexpected error occurred. Please try again.");
       setLoading(false);
     }
   };

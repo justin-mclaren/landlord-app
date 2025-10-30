@@ -18,6 +18,12 @@ import { getOrCreateOGImage } from "@/lib/og-image";
 import { generateSlugFromReport } from "@/lib/slug";
 import { storeSlugMapping } from "@/lib/storage";
 import { addrHash, prefsHash } from "@/lib/hash";
+import {
+  NotFoundError,
+  DataQualityError,
+  ValidationError,
+  normalizeError,
+} from "@/lib/errors";
 import type { DecodeFlowInput, DecodeFlowOutput } from "@/types/workflow";
 import type { ListingJSON } from "@/types/listing";
 
@@ -51,10 +57,19 @@ export async function executeDecodeFlow(
     message: "Normalizing input...",
   });
 
-  const normalized = await normalizeInput({
-    url: input.url,
-    address: input.address,
-  });
+  let normalized;
+  try {
+    normalized = await normalizeInput({
+      url: input.url,
+      address: input.address,
+    });
+  } catch (error) {
+    throw new ValidationError(
+      `Failed to normalize input: ${error instanceof Error ? error.message : String(error)}`,
+      "input",
+      { url: input.url, address: input.address }
+    );
+  }
 
   // Step 2: Get or Create Property
   onProgress?.({
@@ -130,9 +145,11 @@ export async function executeDecodeFlow(
       // and we'll throw a helpful error below
     } else {
       // Not a Zillow URL and no full address - can't proceed
-      throw new Error(
+      throw new ValidationError(
         "Cannot process apartment URL without full address. " +
-          "Please enable scraping fallback (FEATURE_SCRAPE_FALLBACK=true) or provide the full address."
+          "Please enable scraping fallback (FEATURE_SCRAPE_FALLBACK=true) or provide the full address.",
+        "address",
+        { url: normalized.sourceMeta.url }
       );
     }
   } else if (hasFullAddress) {
@@ -184,18 +201,20 @@ export async function executeDecodeFlow(
     // Check again after potential merge
     if (!hasCoreFields(listing)) {
       const { listing: mergedListing } = listing;
-      throw new Error(
-        `Property listing is missing required fields: ${missingFields.join(
-          ", "
-        )}. ` +
-          `Received: ${JSON.stringify({
+      throw new DataQualityError(
+        `Property listing is missing required fields: ${missingFields.join(", ")}`,
+        missingFields,
+        {
+          received: {
             address: mergedListing.address,
             city: mergedListing.city,
             state: mergedListing.state,
             price: mergedListing.price,
             beds: mergedListing.beds,
             baths: mergedListing.baths,
-          })}`
+          },
+          url: normalized.sourceMeta.url,
+        }
       );
     }
   }
@@ -207,37 +226,52 @@ export async function executeDecodeFlow(
       const isZillowUrl = urlObj.hostname.toLowerCase().includes("zillow.com");
 
       if (isZillowUrl && !hasFullAddress) {
-        throw new Error(
+        throw new ValidationError(
           "Zillow apartment URLs don't contain the full address in the URL. " +
             "To decode a specific apartment listing, you need either:\n" +
             "1. A browser extension that scrapes the page (posts to /api/ingestHtml)\n" +
             "2. Enable scraping fallback (FEATURE_SCRAPE_FALLBACK=true) with a scraping service\n" +
-            "3. Provide the full address directly (street address + unit number)"
+            "3. Provide the full address directly (street address + unit number)",
+          "address",
+          { url: normalized.sourceMeta.url, isZillowUrl: true }
         );
       }
     }
 
-    throw new Error(
-      `Could not find property listing. ${
-        normalized.sourceMeta.url
-          ? "Try enabling scraping fallback (FEATURE_SCRAPE_FALLBACK=true) or provide the full address."
-          : "Please provide a valid URL or address."
-      }`
+    throw new NotFoundError(
+      "Property listing",
+      normalized.address || normalized.sourceMeta.url,
+      {
+        address: normalized.address,
+        url: normalized.sourceMeta.url,
+        hasFullAddress,
+      }
     );
   }
 
   if (!hasCoreFields(listing)) {
     const { listing: l } = listing;
-    throw new Error(
-      `Property listing is missing required fields. ` +
-        `Received: ${JSON.stringify({
+    const missingFields: string[] = [];
+    if (!l.address) missingFields.push("address");
+    if (!l.city) missingFields.push("city");
+    if (!l.state) missingFields.push("state");
+    if (!l.price && l.beds === undefined && l.baths === undefined) {
+      missingFields.push("price/beds/baths");
+    }
+    
+    throw new DataQualityError(
+      "Property listing is missing required fields",
+      missingFields,
+      {
+        received: {
           address: l.address,
           city: l.city,
           state: l.state,
           price: l.price,
           beds: l.beds,
           baths: l.baths,
-        })}`
+        },
+      }
     );
   }
 
@@ -311,7 +345,21 @@ export async function executeDecodeFlowSafe(
   try {
     return await executeDecodeFlow(input, onProgress);
   } catch (error) {
-    console.error("Decode flow error:", error);
-    throw error;
+    // Normalize error to ensure it's an AppError
+    const normalizedError = normalizeError(error);
+    
+    // Log error with context
+    console.error("Decode flow error:", {
+      code: normalizedError.code,
+      message: normalizedError.message,
+      statusCode: normalizedError.statusCode,
+      context: normalizedError.context,
+      input: {
+        hasUrl: !!input.url,
+        hasAddress: !!input.address,
+      },
+    });
+    
+    throw normalizedError;
   }
 }

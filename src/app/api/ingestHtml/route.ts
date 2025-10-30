@@ -7,6 +7,15 @@
 import { NextResponse } from "next/server";
 import { getScrapedListing } from "@/lib/scrape";
 import type { ScrapedData } from "@/lib/scrape";
+import {
+  ValidationError,
+  ConfigurationError,
+  ParseError,
+  normalizeError,
+  getStatusCode,
+  getUserMessage,
+  getErrorCode,
+} from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +25,24 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    let body: any;
+    
+    // Parse request body
+    try {
+      body = await request.json();
+    } catch (error) {
+      throw new ValidationError(
+        "Invalid JSON in request body",
+        "body",
+        { originalError: error instanceof Error ? error.message : String(error) }
+      );
+    }
 
     // Validate required fields
     if (!body.url || typeof body.url !== "string") {
-      return NextResponse.json(
-        { error: "Missing or invalid 'url' field" },
-        { status: 400 }
+      throw new ValidationError(
+        "Missing or invalid 'url' field",
+        "url"
       );
     }
 
@@ -30,17 +50,18 @@ export async function POST(request: Request) {
     try {
       new URL(body.url);
     } catch {
-      return NextResponse.json(
-        { error: "Invalid URL format" },
-        { status: 400 }
+      throw new ValidationError(
+        "Invalid URL format",
+        "url",
+        { providedUrl: body.url }
       );
     }
 
     // Feature flag check
     if (process.env.FEATURE_SCRAPE_FALLBACK !== "true") {
-      return NextResponse.json(
-        { error: "Scraping fallback is not enabled" },
-        { status: 503 }
+      throw new ConfigurationError(
+        "FEATURE_SCRAPE_FALLBACK",
+        { url: body.url }
       );
     }
 
@@ -53,12 +74,25 @@ export async function POST(request: Request) {
     };
 
     // Cache the scraped data
-    const listing = await getScrapedListing(body.url, scrapedData);
+    let listing;
+    try {
+      listing = await getScrapedListing(body.url, scrapedData);
+    } catch (error) {
+      throw new ParseError(
+        "Failed to parse scraped data",
+        "scraped_data",
+        {
+          url: body.url,
+          originalError: error instanceof Error ? error.message : String(error),
+        }
+      );
+    }
 
     if (!listing) {
-      return NextResponse.json(
-        { error: "Failed to parse scraped data" },
-        { status: 500 }
+      throw new ParseError(
+        "Failed to extract listing data from scraped content",
+        "scraped_data",
+        { url: body.url }
       );
     }
 
@@ -77,11 +111,26 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error("Error ingesting HTML:", error);
+    const normalizedError = normalizeError(error);
+    const statusCode = getStatusCode(normalizedError);
+    const errorCode = getErrorCode(normalizedError);
+    const userMessage = getUserMessage(normalizedError);
+
+    // Log error with context
+    console.error("Error ingesting HTML:", {
+      code: errorCode,
+      message: normalizedError.message,
+      statusCode,
+      context: normalizedError.context,
+    });
+
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
+      {
+        error: userMessage,
+        code: errorCode,
+        ...(normalizedError.context && { context: normalizedError.context }),
+      },
+      { status: statusCode }
     );
   }
 }
-

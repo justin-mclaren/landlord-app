@@ -5,17 +5,55 @@
 import { NextResponse } from "next/server";
 import { executeDecodeFlowSafe } from "@/flows/decode";
 import type { DecodeFlowInput } from "@/types/workflow";
+import {
+  ValidationError,
+  normalizeError,
+  getStatusCode,
+  getUserMessage,
+  getErrorCode,
+} from "@/lib/errors";
 
 export async function POST(request: Request) {
   try {
-    const body: DecodeFlowInput = await request.json();
+    let body: DecodeFlowInput;
+    
+    // Parse and validate request body
+    try {
+      body = await request.json();
+    } catch (error) {
+      throw new ValidationError(
+        "Invalid JSON in request body",
+        "body",
+        { originalError: error instanceof Error ? error.message : String(error) }
+      );
+    }
     
     // Validate input
     if (!body.url && !body.address) {
-      return NextResponse.json(
-        { error: "Either url or address must be provided" },
-        { status: 400 }
+      throw new ValidationError(
+        "Either url or address must be provided",
+        "input"
       );
+    }
+
+    // Validate address format if provided
+    if (body.address && typeof body.address !== "string") {
+      throw new ValidationError(
+        "Address must be a string",
+        "address"
+      );
+    }
+
+    // Validate URL format if provided
+    if (body.url) {
+      if (typeof body.url !== "string") {
+        throw new ValidationError("URL must be a string", "url");
+      }
+      try {
+        new URL(body.url);
+      } catch {
+        throw new ValidationError("Invalid URL format", "url");
+      }
     }
 
     // Execute decode flow
@@ -30,12 +68,28 @@ export async function POST(request: Request) {
       url: result.reportUrl,
     });
   } catch (error) {
-    console.error("Decode error:", error);
+    const normalizedError = normalizeError(error);
+    const statusCode = getStatusCode(normalizedError);
+    const errorCode = getErrorCode(normalizedError);
+    const userMessage = getUserMessage(normalizedError);
+
+    // Log error with context
+    console.error("Decode error:", {
+      code: errorCode,
+      message: normalizedError.message,
+      statusCode,
+      context: normalizedError.context,
+      stack: normalizedError.stack,
+    });
+
+    // Return structured error response
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Internal server error",
+        error: userMessage,
+        code: errorCode,
+        ...(normalizedError.context && { context: normalizedError.context }),
       },
-      { status: 500 }
+      { status: statusCode }
     );
   }
 }

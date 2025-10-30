@@ -259,7 +259,7 @@ export async function extractAddressFromZillowUrl(
   // 1. Browser extension to scrape the actual address from the page
   // 2. Scraping service (with FEATURE_SCRAPE_FALLBACK=true)
   // 3. User to provide the full address directly
-  
+
   // If not in cache, try lightweight server-side fetch to extract address
   // This is a minimal operation (just fetch HTML and extract address)
   // Doesn't require full scraping feature flag

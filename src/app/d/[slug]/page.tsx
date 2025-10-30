@@ -27,7 +27,7 @@ export async function generateMetadata({
 }) {
   const { slug } = await params;
   const mapping = await getSlugMapping(slug);
-  
+
   if (!mapping) {
     return {
       title: "Report Not Found",
@@ -37,7 +37,7 @@ export async function generateMetadata({
 
   const { listing, report } = mapping;
   const address = `${listing.listing.address}, ${listing.listing.city}, ${listing.listing.state}`;
-  
+
   return {
     title: `${address} - Decoder Report`,
     description: report.caption,
@@ -57,7 +57,7 @@ export default async function ReportPage({
   const { slug } = await params;
 
   const mapping = await getSlugMapping(slug);
-  
+
   if (!mapping) {
     notFound();
   }
@@ -67,4 +67,3 @@ export default async function ReportPage({
 
   return <ReportView report={report} address={address} />;
 }
-
