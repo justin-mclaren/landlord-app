@@ -7,7 +7,11 @@
  */
 import { normalizeInput, isFullAddress } from "@/lib/normalize";
 import { getRentCastListing, hasCoreFields } from "@/lib/rentcast";
-import { getScrapedListing, mergeListings, extractAddressFromZillowUrl } from "@/lib/scrape";
+import {
+  getScrapedListing,
+  mergeListings,
+  extractAddressFromZillowUrl,
+} from "@/lib/scrape";
 import { augmentProperty } from "@/lib/augment";
 import { getOrCreateDecoderReport } from "@/lib/decoder";
 import { getOrCreateOGImage } from "@/lib/og-image";
@@ -69,7 +73,7 @@ export async function executeDecodeFlow(
     const urlObj = new URL(normalized.sourceMeta.url);
     const isZillowUrl = urlObj.hostname.toLowerCase().includes("zillow.com");
 
-    if (isZillowUrl && process.env.FEATURE_SCRAPE_FALLBACK === "true") {
+    if (isZillowUrl) {
       onProgress?.({
         step: "property",
         progress: 0.32,
@@ -77,10 +81,13 @@ export async function executeDecodeFlow(
       });
 
       // Try to extract full address from Zillow page (from cached scraped data)
-      const extractedAddress = await extractAddressFromZillowUrl(normalized.sourceMeta.url);
+      // This doesn't require FEATURE_SCRAPE_FALLBACK - it only checks cache
+      const extractedAddress = await extractAddressFromZillowUrl(
+        normalized.sourceMeta.url
+      );
 
       if (extractedAddress && isFullAddress(extractedAddress)) {
-        // We got a full address from scraping - use it with RentCast
+        // We got a full address from cached scraped data - use it with RentCast
         onProgress?.({
           step: "property",
           progress: 0.35,
@@ -92,8 +99,8 @@ export async function executeDecodeFlow(
           normalized.sourceMeta.url
         );
 
-        // If RentCast is missing fields, merge with scraped data
-        if (listing && !hasCoreFields(listing)) {
+        // If RentCast is missing fields, try merging with scraped data (if enabled)
+        if (listing && !hasCoreFields(listing) && process.env.FEATURE_SCRAPE_FALLBACK === "true") {
           const scraped = await getScrapedListing(normalized.sourceMeta.url);
           if (scraped) {
             listing = mergeListings(listing, scraped);
@@ -102,8 +109,8 @@ export async function executeDecodeFlow(
             );
           }
         }
-      } else {
-        // Couldn't extract address - fall back to full scraping
+      } else if (process.env.FEATURE_SCRAPE_FALLBACK === "true") {
+        // Couldn't extract address from cache - fall back to full scraping (if enabled)
         onProgress?.({
           step: "property",
           progress: 0.32,
@@ -115,7 +122,10 @@ export async function executeDecodeFlow(
           listing = scraped;
         }
       }
-    } else if (!isZillowUrl || process.env.FEATURE_SCRAPE_FALLBACK !== "true") {
+      // If address extraction failed and scraping is disabled, listing will remain null
+      // and we'll throw a helpful error below
+    } else {
+      // Not a Zillow URL and no full address - can't proceed
       throw new Error(
         "Cannot process apartment URL without full address. " +
           "Please enable scraping fallback (FEATURE_SCRAPE_FALLBACK=true) or provide the full address."
@@ -187,6 +197,20 @@ export async function executeDecodeFlow(
   }
 
   if (!listing) {
+    // Provide helpful error message based on context
+    if (normalized.sourceMeta.url) {
+      const urlObj = new URL(normalized.sourceMeta.url);
+      const isZillowUrl = urlObj.hostname.toLowerCase().includes("zillow.com");
+      
+      if (isZillowUrl && !hasFullAddress) {
+        throw new Error(
+          "Could not extract address from Zillow URL. " +
+          "If you have a browser extension that scrapes the page, it will cache the address automatically. " +
+          "Otherwise, enable scraping fallback (FEATURE_SCRAPE_FALLBACK=true) or provide the full address."
+        );
+      }
+    }
+    
     throw new Error(
       `Could not find property listing. ${
         normalized.sourceMeta.url
