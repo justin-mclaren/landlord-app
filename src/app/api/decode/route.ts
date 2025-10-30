@@ -4,33 +4,10 @@
  */
 import { NextResponse } from "next/server";
 import { executeDecodeFlowSafe } from "@/flows/decode";
-import { checkDecodeRateLimit } from "@/lib/rate-limit";
 import type { DecodeFlowInput } from "@/types/workflow";
 
 export async function POST(request: Request) {
   try {
-    // Check rate limit (before processing to save resources)
-    const rateLimit = await checkDecodeRateLimit(undefined, request.headers);
-    
-    if (!rateLimit.success) {
-      return NextResponse.json(
-        {
-          error: "Rate limit exceeded",
-          retryAfter: rateLimit.retryAfter,
-          reset: rateLimit.reset,
-        },
-        {
-          status: 429,
-          headers: {
-            "X-RateLimit-Limit": rateLimit.limit.toString(),
-            "X-RateLimit-Remaining": rateLimit.remaining.toString(),
-            "X-RateLimit-Reset": rateLimit.reset.toString(),
-            "Retry-After": rateLimit.retryAfter?.toString() || "3600",
-          },
-        }
-      );
-    }
-
     const body: DecodeFlowInput = await request.json();
     
     // Validate input
@@ -48,19 +25,10 @@ export async function POST(request: Request) {
       console.log(`Decode progress: ${progress.step} (${(progress.progress * 100).toFixed(0)}%)`);
     });
 
-    return NextResponse.json(
-      {
-        status: "ok",
-        url: result.reportUrl,
-      },
-      {
-        headers: {
-          "X-RateLimit-Limit": rateLimit.limit.toString(),
-          "X-RateLimit-Remaining": rateLimit.remaining.toString(),
-          "X-RateLimit-Reset": rateLimit.reset.toString(),
-        },
-      }
-    );
+    return NextResponse.json({
+      status: "ok",
+      url: result.reportUrl,
+    });
   } catch (error) {
     console.error("Decode error:", error);
     return NextResponse.json(
