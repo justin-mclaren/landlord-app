@@ -65,7 +65,9 @@ export async function executeDecodeFlow(
     });
   } catch (error) {
     throw new ValidationError(
-      `Failed to normalize input: ${error instanceof Error ? error.message : String(error)}`,
+      `Failed to normalize input: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
       "input",
       { url: input.url, address: input.address }
     );
@@ -202,7 +204,9 @@ export async function executeDecodeFlow(
     if (!hasCoreFields(listing)) {
       const { listing: mergedListing } = listing;
       throw new DataQualityError(
-        `Property listing is missing required fields: ${missingFields.join(", ")}`,
+        `Property listing is missing required fields: ${missingFields.join(
+          ", "
+        )}`,
         missingFields,
         {
           received: {
@@ -258,7 +262,7 @@ export async function executeDecodeFlow(
     if (!l.price && l.beds === undefined && l.baths === undefined) {
       missingFields.push("price/beds/baths");
     }
-    
+
     throw new DataQualityError(
       "Property listing is missing required fields",
       missingFields,
@@ -347,7 +351,7 @@ export async function executeDecodeFlowSafe(
   } catch (error) {
     // Normalize error to ensure it's an AppError
     const normalizedError = normalizeError(error);
-    
+
     // Log error with context
     console.error("Decode flow error:", {
       code: normalizedError.code,
@@ -359,7 +363,7 @@ export async function executeDecodeFlowSafe(
         hasAddress: !!input.address,
       },
     });
-    
+
     throw normalizedError;
   }
 }

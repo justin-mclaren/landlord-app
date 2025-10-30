@@ -16,18 +16,16 @@ import {
 export async function POST(request: Request) {
   try {
     let body: DecodeFlowInput;
-    
+
     // Parse and validate request body
     try {
       body = await request.json();
     } catch (error) {
-      throw new ValidationError(
-        "Invalid JSON in request body",
-        "body",
-        { originalError: error instanceof Error ? error.message : String(error) }
-      );
+      throw new ValidationError("Invalid JSON in request body", "body", {
+        originalError: error instanceof Error ? error.message : String(error),
+      });
     }
-    
+
     // Validate input
     if (!body.url && !body.address) {
       throw new ValidationError(
@@ -38,10 +36,7 @@ export async function POST(request: Request) {
 
     // Validate address format if provided
     if (body.address && typeof body.address !== "string") {
-      throw new ValidationError(
-        "Address must be a string",
-        "address"
-      );
+      throw new ValidationError("Address must be a string", "address");
     }
 
     // Validate URL format if provided
@@ -60,7 +55,11 @@ export async function POST(request: Request) {
     const result = await executeDecodeFlowSafe(body, (progress) => {
       // For MVP, we're doing synchronous execution
       // In production with async workflows, you'd store progress and return jobId
-      console.log(`Decode progress: ${progress.step} (${(progress.progress * 100).toFixed(0)}%)`);
+      console.log(
+        `Decode progress: ${progress.step} (${(progress.progress * 100).toFixed(
+          0
+        )}%)`
+      );
     });
 
     return NextResponse.json({
@@ -93,4 +92,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
