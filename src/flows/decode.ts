@@ -100,7 +100,11 @@ export async function executeDecodeFlow(
         );
 
         // If RentCast is missing fields, try merging with scraped data (if enabled)
-        if (listing && !hasCoreFields(listing) && process.env.FEATURE_SCRAPE_FALLBACK === "true") {
+        if (
+          listing &&
+          !hasCoreFields(listing) &&
+          process.env.FEATURE_SCRAPE_FALLBACK === "true"
+        ) {
           const scraped = await getScrapedListing(normalized.sourceMeta.url);
           if (scraped) {
             listing = mergeListings(listing, scraped);
@@ -201,16 +205,18 @@ export async function executeDecodeFlow(
     if (normalized.sourceMeta.url) {
       const urlObj = new URL(normalized.sourceMeta.url);
       const isZillowUrl = urlObj.hostname.toLowerCase().includes("zillow.com");
-      
+
       if (isZillowUrl && !hasFullAddress) {
         throw new Error(
-          "Could not extract address from Zillow URL. " +
-          "If you have a browser extension that scrapes the page, it will cache the address automatically. " +
-          "Otherwise, enable scraping fallback (FEATURE_SCRAPE_FALLBACK=true) or provide the full address."
+          "Zillow apartment URLs don't contain the full address in the URL. " +
+            "To decode a specific apartment listing, you need either:\n" +
+            "1. A browser extension that scrapes the page (posts to /api/ingestHtml)\n" +
+            "2. Enable scraping fallback (FEATURE_SCRAPE_FALLBACK=true) with a scraping service\n" +
+            "3. Provide the full address directly (street address + unit number)"
         );
       }
     }
-    
+
     throw new Error(
       `Could not find property listing. ${
         normalized.sourceMeta.url
