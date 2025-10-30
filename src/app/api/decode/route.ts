@@ -3,8 +3,7 @@
  * Main decode endpoint - starts the decode workflow
  */
 import { NextResponse } from "next/server";
-import { normalizeInput } from "@/lib/normalize";
-import { getRentCastListing, hasCoreFields } from "@/lib/rentcast";
+import { executeDecodeFlowSafe } from "@/flows/decode";
 import type { DecodeFlowInput } from "@/types/workflow";
 
 export async function POST(request: Request) {
@@ -19,39 +18,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Normalize input
-    const normalized = await normalizeInput({
-      url: body.url,
-      address: body.address,
+    // Execute decode flow
+    const result = await executeDecodeFlowSafe(body, (progress) => {
+      // For MVP, we're doing synchronous execution
+      // In production with async workflows, you'd store progress and return jobId
+      console.log(`Decode progress: ${progress.step} (${(progress.progress * 100).toFixed(0)}%)`);
     });
 
-    // For MVP, we'll do a simple synchronous flow
-    // Later, this will trigger a Durable Workflow
-    const listing = await getRentCastListing(
-      normalized.address,
-      normalized.sourceMeta.url
-    );
-
-    if (!listing) {
-      return NextResponse.json(
-        { error: "Could not find property listing" },
-        { status: 404 }
-      );
-    }
-
-    if (!hasCoreFields(listing)) {
-      return NextResponse.json(
-        { error: "Property listing is missing required fields" },
-        { status: 400 }
-      );
-    }
-
-    // TODO: Continue with augmentation, AI decoding, OG image generation
-    // For now, return a placeholder response
     return NextResponse.json({
       status: "ok",
-      url: "/d/placeholder-slug", // TODO: Generate actual slug
-      message: "Decode workflow started (placeholder - full workflow not yet implemented)",
+      url: result.reportUrl,
     });
   } catch (error) {
     console.error("Decode error:", error);

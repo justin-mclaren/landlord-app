@@ -6,7 +6,7 @@ export type AugmentJSON = {
   geocode?: {
     lat: number;
     lon: number;
-    provider: "nominatim" | "mapbox";
+    provider: "nominatim" | "mapbox" | "listing";
   };
   noise?: {
     level: "high" | "medium" | "low";
@@ -22,7 +22,7 @@ export type AugmentJSON = {
     work_address?: string;
     driving_time_min?: number;
     driving_time_range?: [number, number]; // [min, max] in minutes
-    provider?: "google" | "mapbox";
+    provider?: "google" | "mapbox" | "estimate";
   };
   computed_at: string;
   version?: string; // Schema version for cache busting
