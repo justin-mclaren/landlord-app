@@ -11,23 +11,15 @@ const inter = Inter({
 
 // Satoshi Black for headlines
 // TODO: Add Satoshi-Black.woff2 to src/fonts/ directory
-// For now, using system font as fallback
-const satoshiBlack = localFont({
-  src: [
-    {
-      path: "../fonts/Satoshi-Black.woff2",
-      weight: "900",
-      style: "normal",
-    },
-  ],
+// For now, using Inter Bold as fallback until Satoshi font is added
+const satoshiBlack = {
   variable: "--font-satoshi-black",
-  display: "swap",
-  fallback: ["system-ui", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-});
+};
 
 export const metadata: Metadata = {
   title: "Landlord Lies - Decode Rental Listings",
-  description: "Paste any rental listing – our AI exposes the truth behind landlord lingo.",
+  description:
+    "Paste any rental listing – our AI exposes the truth behind landlord lingo.",
 };
 
 export default function RootLayout({
