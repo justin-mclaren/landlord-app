@@ -293,9 +293,12 @@ export async function extractAddressFromZillowUrl(
   } catch (error) {
     // If fetch failed (e.g., CAPTCHA), log and return null
     // The error will be handled by the calling code
-    console.warn(`Failed to fetch address from Zillow URL ${url}:`, error instanceof Error ? error.message : error);
+    console.warn(
+      `Failed to fetch address from Zillow URL ${url}:`,
+      error instanceof Error ? error.message : error
+    );
   }
-  
+
   console.log(`Failed to extract address from Zillow URL: ${url}`);
   return null;
 }
@@ -334,12 +337,18 @@ async function fetchZillowAddress(url: string): Promise<string | null> {
     console.log(`Fetched ${html.length} bytes from Zillow page`);
 
     // Check if Zillow returned a CAPTCHA page instead of the property page
-    if (html.includes("px-captcha") || html.includes("Before we continue") || html.includes("Press & Hold")) {
-      console.warn(`Zillow returned CAPTCHA page for ${url} - server-side scraping blocked`);
+    if (
+      html.includes("px-captcha") ||
+      html.includes("Before we continue") ||
+      html.includes("Press & Hold")
+    ) {
+      console.warn(
+        `Zillow returned CAPTCHA page for ${url} - server-side scraping blocked`
+      );
       throw new Error(
         "Zillow blocked the request with a CAPTCHA. " +
-        "Server-side scraping is not available for Zillow URLs. " +
-        "Please use a browser extension to scrape the page, or enable scraping fallback with a scraping service."
+          "Server-side scraping is not available for Zillow URLs. " +
+          "Please use a browser extension to scrape the page, or enable scraping fallback with a scraping service."
       );
     }
 
