@@ -5,7 +5,7 @@
  * Note: For MVP, this is a simple async function.
  * In production with Vercel Durable Workflows, this would be a workflow.
  */
-import { normalizeInput } from "@/lib/normalize";
+import { normalizeInput, isFullAddress } from "@/lib/normalize";
 import { getRentCastListing, hasCoreFields } from "@/lib/rentcast";
 import { getScrapedListing, mergeListings } from "@/lib/scrape";
 import { augmentProperty } from "@/lib/augment";
@@ -60,23 +60,57 @@ export async function executeDecodeFlow(
   });
 
   let listing: ListingJSON | null = null;
+  const hasFullAddress = normalized.address ? isFullAddress(normalized.address) : false;
 
-  // If we have a URL but no address extracted, try scraping first
-  if (normalized.sourceMeta.url && !normalized.address && process.env.FEATURE_SCRAPE_FALLBACK === "true") {
+  // For apartment URLs: if we only have city/state (not full address), rely on scraping
+  if (normalized.sourceMeta.url && !hasFullAddress) {
+    if (process.env.FEATURE_SCRAPE_FALLBACK === "true") {
+      onProgress?.({
+        step: "property",
+        progress: 0.32,
+        message: "Fetching property data from page...",
+      });
+
+      const scraped = await getScrapedListing(normalized.sourceMeta.url);
+      if (scraped && hasCoreFields(scraped)) {
+        listing = scraped;
+        
+        // If scraping provided a full address, optionally enrich with RentCast
+        if (listing.listing.address && isFullAddress(listing.listing.address)) {
+          onProgress?.({
+            step: "property",
+            progress: 0.35,
+            message: "Enriching with RentCast data...",
+          });
+          
+          const rentcastData = await getRentCastListing(
+            listing.listing.address,
+            normalized.sourceMeta.url
+          );
+          
+          if (rentcastData && hasCoreFields(rentcastData)) {
+            // Merge scraped + RentCast (prefer RentCast for structured fields)
+            listing = mergeListings(rentcastData, scraped);
+            console.log(
+              `Enriched scraped data with RentCast for ${normalized.sourceMeta.url}`
+            );
+          }
+        }
+      }
+    } else {
+      throw new Error(
+        "Cannot process apartment URL without full address. " +
+        "Please enable scraping fallback (FEATURE_SCRAPE_FALLBACK=true) or provide the full address."
+      );
+    }
+  } else if (hasFullAddress) {
+    // We have a full address - try RentCast first
     onProgress?.({
       step: "property",
       progress: 0.32,
-      message: "Checking scraped data...",
+      message: "Fetching property data...",
     });
     
-    const scraped = await getScrapedListing(normalized.sourceMeta.url);
-    if (scraped && hasCoreFields(scraped)) {
-      listing = scraped;
-    }
-  }
-
-  // Try RentCast if we have an address or if scraping didn't work
-  if (!listing && normalized.address) {
     listing = await getRentCastListing(
       normalized.address,
       normalized.sourceMeta.url
@@ -134,20 +168,13 @@ export async function executeDecodeFlow(
     }
   }
 
-  // Final check: if we still don't have a listing, try scraping as last resort
-  if (!listing && normalized.sourceMeta.url && process.env.FEATURE_SCRAPE_FALLBACK === "true") {
-    onProgress?.({
-      step: "property",
-      progress: 0.38,
-      message: "Trying scraping fallback...",
-    });
-
-    listing = await getScrapedListing(normalized.sourceMeta.url);
-  }
-
   if (!listing) {
     throw new Error(
-      `Could not find property listing. ${normalized.sourceMeta.url ? "Try enabling scraping fallback (FEATURE_SCRAPE_FALLBACK=true) or provide the full address." : "Please provide a valid URL or address."}`
+      `Could not find property listing. ${
+        normalized.sourceMeta.url
+          ? "Try enabling scraping fallback (FEATURE_SCRAPE_FALLBACK=true) or provide the full address."
+          : "Please provide a valid URL or address."
+      }`
     );
   }
 

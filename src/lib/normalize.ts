@@ -34,7 +34,8 @@ function extractAddressFromUrl(url: string): string | null {
       // Pattern 2: /apartments/city-state/property-name/ID/
       // For apartment listings, address isn't in URL - need to scrape or use address param
       // Check query params for address
-      const addressParam = urlObj.searchParams.get("address") || urlObj.searchParams.get("addr");
+      const addressParam =
+        urlObj.searchParams.get("address") || urlObj.searchParams.get("addr");
       if (addressParam) {
         return addressParam;
       }
@@ -43,22 +44,23 @@ function extractAddressFromUrl(url: string): string | null {
       // /apartments/costa-mesa-ca/... -> "Costa Mesa, CA"
       const apartmentsMatch = urlObj.pathname.match(/\/apartments\/([^/]+)/);
       if (apartmentsMatch) {
-        const cityStatePart = apartmentsMatch[1]
-          .replace(/-/g, " ")
-          .trim();
-        
+        const cityStatePart = apartmentsMatch[1].replace(/-/g, " ").trim();
+
         // Try to extract and format city/state
         // Pattern: "costa mesa ca" -> "Costa Mesa, CA"
         const cityStateMatch = cityStatePart.match(/^(.+?)\s+([a-z]{2})$/i);
         if (cityStateMatch) {
           const city = cityStateMatch[1]
             .split(/\s+/)
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .map(
+              (word) =>
+                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+            )
             .join(" ");
           const state = cityStateMatch[2].toUpperCase();
           return `${city}, ${state}`;
         }
-        
+
         // Fallback: return as-is with state abbreviations
         const cityState = cityStatePart
           .replace(/\bca\b/i, "CA")
@@ -97,10 +99,7 @@ function extractAddressFromUrl(url: string): string | null {
  * Normalize address string to canonical format
  */
 function normalizeAddressString(address: string): string {
-  let normalized = address
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, " "); // Replace multiple spaces with single space
+  let normalized = address.toLowerCase().trim().replace(/\s+/g, " "); // Replace multiple spaces with single space
 
   // Standardize common abbreviations
   const abbreviations: Record<string, string> = {
@@ -181,7 +180,7 @@ export async function normalizeInput(input: {
   if (input.url) {
     // Try to extract address from URL
     const extractedAddress = extractAddressFromUrl(input.url);
-    
+
     if (extractedAddress) {
       return {
         address: normalizeAddressString(extractedAddress),
@@ -192,7 +191,7 @@ export async function normalizeInput(input: {
         },
       };
     }
-    
+
     // If URL extraction fails, try to use address if provided
     if (input.address) {
       return {
@@ -204,7 +203,7 @@ export async function normalizeInput(input: {
         },
       };
     }
-    
+
     // If we can't extract, allow partial address (city/state) to proceed
     // The decode flow will try RentCast first, then scraping fallback
     // This allows apartment URLs where address isn't in the URL path
@@ -232,6 +231,25 @@ export async function normalizeInput(input: {
 }
 
 /**
+ * Check if address is a full address (has street) or just city/state
+ */
+export function isFullAddress(address: string): boolean {
+  if (!address || address.trim().length === 0) {
+    return false;
+  }
+  
+  const parsed = parseAddress(address);
+  // Full address needs street (not just city/state)
+  // City/state pattern: "City, ST" (no street number/name)
+  const cityStatePattern = /^[A-Za-z\s]+,\s*[A-Z]{2}$/;
+  if (cityStatePattern.test(address.trim())) {
+    return false; // Just city/state, not a full address
+  }
+  
+  return !!(parsed.street && parsed.street.length > 0);
+}
+
+/**
  * Validate that a normalized address has required fields
  */
 export function validateAddress(address: string): boolean {
@@ -239,4 +257,3 @@ export function validateAddress(address: string): boolean {
   // At minimum, we need street and city
   return !!(parsed.street && parsed.city);
 }
-
