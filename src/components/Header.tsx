@@ -9,10 +9,11 @@ export function Header() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2">
           <div className="flex items-center gap-2">
-            {/* Placeholder for mascot icon - replace with actual asset */}
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1A1B2E]/20">
-              <span className="text-xs">🎩</span>
-            </div>
+            <img
+              src="/landlord-bust.svg"
+              alt="Landlord Lies mascot"
+              className="h-8 w-8 flex-shrink-0"
+            />
             <span className="font-title text-xl font-black tracking-tight">
               <span className="text-[#1A1B2E]">LANDLORD</span>{" "}
               <span className="text-[#DC2626]">LIES</span>

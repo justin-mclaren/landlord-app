@@ -54,11 +54,11 @@ export function HowItWorksSection() {
       title: "Our AI analyzes",
       description: "We decode the listing and check the facts",
       icon: (
-        <div className="relative">
-          <div className="h-16 w-16 rounded-full bg-[#1A1B2E]/10 flex items-center justify-center">
-            <span className="text-4xl">🎩</span>
-          </div>
-        </div>
+        <img
+          src="/landlord-bust.svg"
+          alt="AI analyzing"
+          className="h-16 w-16"
+        />
       ),
     },
     {

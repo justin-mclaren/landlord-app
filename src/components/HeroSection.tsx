@@ -152,12 +152,13 @@ export function HeroSection() {
 
         {/* Right Column: Mascot Illustration */}
         <div className="relative flex items-center justify-center lg:justify-end">
-          {/* Placeholder for mascot - replace with actual asset */}
           <div className="relative">
-            <div className="h-64 w-64 rounded-full bg-[#1A1B2E]/10 md:h-80 md:w-80 lg:h-96 lg:w-96 flex items-center justify-center">
-              <span className="text-6xl md:text-8xl">🎩</span>
-            </div>
-            {/* Speech bubble placeholder */}
+            <img
+              src="/landlord-full.svg"
+              alt="Landlord Lies mascot"
+              className="h-64 w-auto md:h-80 lg:h-96"
+            />
+            {/* Speech bubble */}
             <div className="absolute -top-8 left-1/2 -translate-x-1/2 rounded-2xl bg-white px-4 py-2 shadow-lg md:-top-12">
               <p className="text-sm font-semibold text-[#1E1E1E] md:text-base">
                 Urban Oasis
