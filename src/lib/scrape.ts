@@ -279,14 +279,14 @@ export async function extractAddressFromZillowUrl(
           address,
           city: "",
           state: "",
-          price: null,
+          price: undefined,
           price_currency: "USD",
           price_type: "rent",
-          beds: null,
-          baths: null,
-          sqft: null,
+          beds: undefined,
+          baths: undefined,
+          sqft: undefined,
           features: [],
-          description_raw: null,
+          description_raw: undefined,
         },
       };
       // Cache it (even though it's incomplete - just for address lookup)
@@ -306,18 +306,31 @@ export async function extractAddressFromZillowUrl(
  */
 async function fetchZillowAddress(url: string): Promise<string | null> {
   try {
+    console.log(`Fetching Zillow page for address extraction: ${url}`);
+    
+    // Use a timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
     const response = await fetch(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
       },
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
+      console.warn(`Zillow fetch failed with status ${response.status}`);
       return null;
     }
 
     const html = await response.text();
+    console.log(`Fetched ${html.length} bytes from Zillow page`);
 
     // Try to extract address from common Zillow patterns
     // Pattern 1: JSON-LD structured data
@@ -329,11 +342,13 @@ async function fetchZillowAddress(url: string): Promise<string | null> {
         const jsonLd = JSON.parse(jsonLdMatch[1]);
         if (jsonLd.address?.streetAddress) {
           const address = `${jsonLd.address.streetAddress}, ${jsonLd.address.addressLocality}, ${jsonLd.address.addressRegion}`;
+          console.log(`Found address in JSON-LD: ${address}`);
           if (isFullAddress(address)) {
             return address;
           }
         }
-      } catch {
+      } catch (e) {
+        console.warn("Failed to parse JSON-LD:", e);
         // Continue to try other patterns
       }
     }
@@ -344,6 +359,7 @@ async function fetchZillowAddress(url: string): Promise<string | null> {
     );
     if (addressMatch) {
       const address = addressMatch[1].trim();
+      console.log(`Found address in data-testid: ${address}`);
       if (isFullAddress(address)) {
         return address;
       }
@@ -361,6 +377,7 @@ async function fetchZillowAddress(url: string): Promise<string | null> {
       );
       if (cityStateMatch) {
         const address = `${street}, ${cityStateMatch[1]}, ${cityStateMatch[2]}`;
+        console.log(`Found address in itemprop: ${address}`);
         if (isFullAddress(address)) {
           return address;
         }
@@ -381,15 +398,21 @@ async function fetchZillowAddress(url: string): Promise<string | null> {
       );
       if (metaLocalityMatch && metaRegionMatch) {
         const address = `${street}, ${metaLocalityMatch[1]}, ${metaRegionMatch[1]}`;
+        console.log(`Found address in meta tags: ${address}`);
         if (isFullAddress(address)) {
           return address;
         }
       }
     }
 
+    console.warn("Could not extract address from Zillow HTML using any pattern");
     return null;
   } catch (error) {
-    console.warn(`Error fetching Zillow address for ${url}:`, error);
+    if (error instanceof Error && error.name === "AbortError") {
+      console.warn(`Request timeout fetching Zillow URL: ${url}`);
+    } else {
+      console.error(`Error fetching Zillow address for ${url}:`, error);
+    }
     return null;
   }
 }
