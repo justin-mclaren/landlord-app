@@ -154,7 +154,7 @@ export function HeroSection() {
         </div>
 
         {/* Right Column: Mascot Illustration */}
-        <div className="relative flex items-center justify-center lg:justify-start">
+        <div className="relative flex items-center justify-center lg:justify-end">
           <div className="relative">
             <img
               src="/landlord-full.svg"
