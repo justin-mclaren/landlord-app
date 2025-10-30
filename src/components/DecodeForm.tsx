@@ -3,7 +3,6 @@
 import { useState } from "react";
 
 export function DecodeForm() {
-  const [url, setUrl] = useState("");
   const [address, setAddress] = useState("");
   const [workAddress, setWorkAddress] = useState("");
   const [loading, setLoading] = useState(false);
@@ -21,7 +20,6 @@ export function DecodeForm() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          url: url || undefined,
           address: address || undefined,
           prefs: {
             workAddress: workAddress || undefined,
@@ -58,37 +56,6 @@ export function DecodeForm() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* URL Input */}
-        <div>
-          <label
-            htmlFor="url"
-            className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-          >
-            Listing URL (Zillow, Apartments.com, etc.)
-          </label>
-          <input
-            id="url"
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://www.zillow.com/homedetails/..."
-            className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-black placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-600 dark:focus:ring-zinc-600"
-            disabled={loading}
-          />
-        </div>
-
-        {/* Divider */}
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-zinc-300 dark:border-zinc-700"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="bg-white px-2 text-zinc-500 dark:bg-black dark:text-zinc-400">
-              OR
-            </span>
-          </div>
-        </div>
-
         {/* Address Input */}
         <div>
           <label
@@ -105,6 +72,7 @@ export function DecodeForm() {
             placeholder="123 Main St, City, ST 12345"
             className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-black placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-zinc-600 dark:focus:ring-zinc-600"
             disabled={loading}
+            required
           />
         </div>
 
@@ -137,7 +105,7 @@ export function DecodeForm() {
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={loading || (!url && !address)}
+          disabled={loading || !address}
           className="w-full rounded-lg bg-black px-6 py-3 font-semibold text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
         >
           {loading ? "Decoding..." : "Decode Listing"}
