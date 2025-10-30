@@ -88,11 +88,14 @@ export function HeroSection() {
       <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
         {/* Left Column: Text Content */}
         <div className="flex flex-col justify-center">
-          <h1 className="mb-4 text-4xl font-black leading-tight text-[#1E1E1E] md:text-5xl lg:text-6xl">
-            They said{" "}
-            <span className="italic">'Cozy.'</span> We heard{" "}
-            <span className="text-[#DC2626]">'Cramped.'</span>
-          </h1>
+          <div className="mb-4">
+            <p className="text-4xl font-black leading-tight text-[#1E1E1E] md:text-5xl lg:text-6xl">
+              They said <span className="italic">'Cozy.'</span>
+            </p>
+            <p className="text-4xl font-black leading-tight text-[#DC2626] md:text-5xl lg:text-6xl">
+              We heard <span className="italic">'Cramped.'</span>
+            </p>
+          </div>
           <p className="mb-8 text-lg leading-relaxed text-[#1E1E1E] md:text-xl">
             Enter any property address – our AI exposes the truth behind landlord
             lingo.
@@ -151,7 +154,7 @@ export function HeroSection() {
         </div>
 
         {/* Right Column: Mascot Illustration */}
-        <div className="relative flex items-center justify-center lg:justify-end">
+        <div className="relative flex items-center justify-center lg:justify-start">
           <div className="relative">
             <img
               src="/landlord-full.svg"
