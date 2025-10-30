@@ -238,15 +238,36 @@ export function isFullAddress(address: string): boolean {
     return false;
   }
   
-  const parsed = parseAddress(address);
-  // Full address needs street (not just city/state)
-  // City/state pattern: "City, ST" (no street number/name)
-  const cityStatePattern = /^[A-Za-z\s]+,\s*[A-Z]{2}$/;
-  if (cityStatePattern.test(address.trim())) {
-    return false; // Just city/state, not a full address
+  const trimmed = address.trim();
+  
+  // City/state pattern: "City, ST" or "City, st" (case-insensitive for state)
+  // This catches patterns like "Costa Mesa, CA" or "costa mesa, ca"
+  const cityStatePattern = /^[A-Za-z\s]+,\s*[A-Za-z]{2}$/;
+  if (cityStatePattern.test(trimmed)) {
+    // Check if it's ONLY city/state (no street number/name)
+    // A full address should have a street component with numbers or street indicators
+    const hasStreetNumber = /\d/.test(trimmed);
+    const hasStreetName = /\b(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|ct|court|way|pl|place)\b/i.test(trimmed);
+    
+    if (!hasStreetNumber && !hasStreetName) {
+      return false; // Just city/state, not a full address
+    }
   }
   
-  return !!(parsed.street && parsed.street.length > 0);
+  // Parse to check if we have a proper street component
+  const parsed = parseAddress(address);
+  // Street should exist AND not just be the full address (fallback case)
+  if (parsed.street && parsed.street !== trimmed) {
+    return true; // We parsed a distinct street component
+  }
+  
+  // If parseAddress returned street === full address, check if it looks like a street
+  if (parsed.street === trimmed) {
+    // Must have street number or street name indicator
+    return /\d/.test(trimmed) || /\b(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|ct|court|way|pl|place)\b/i.test(trimmed);
+  }
+  
+  return false;
 }
 
 /**
