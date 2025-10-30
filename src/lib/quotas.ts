@@ -17,7 +17,9 @@ function getFreeCheckKey(userId: string): string {
 /**
  * Check if user has used their free check
  */
-export async function hasUsedFreeCheck(userId: string | null | undefined): Promise<boolean> {
+export async function hasUsedFreeCheck(
+  userId: string | null | undefined
+): Promise<boolean> {
   if (!userId) {
     return false; // Anonymous users haven't used free check
   }
@@ -35,7 +37,9 @@ export async function hasUsedFreeCheck(userId: string | null | undefined): Promi
 /**
  * Mark free check as used
  */
-export async function markFreeCheckUsed(userId: string | null | undefined): Promise<void> {
+export async function markFreeCheckUsed(
+  userId: string | null | undefined
+): Promise<void> {
   if (!userId) {
     return;
   }

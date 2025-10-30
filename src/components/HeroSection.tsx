@@ -1,16 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useUser, SignUp } from "@clerk/nextjs";
 
 export function HeroSection() {
+  const { isSignedIn, isLoaded: userLoaded } = useUser();
   const [address, setAddress] = useState("");
   const [workAddress, setWorkAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSignUp, setShowSignUp] = useState(false);
+  const [pendingDecode, setPendingDecode] = useState<{ address: string; workAddress: string } | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const performDecode = useCallback(async (addr: string, workAddr: string) => {
     setLoading(true);
     setError(null);
 
@@ -21,9 +24,9 @@ export function HeroSection() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          address: address || undefined,
+          address: addr || undefined,
           prefs: {
-            workAddress: workAddress || undefined,
+            workAddress: workAddr || undefined,
           },
         }),
       });
@@ -52,6 +55,8 @@ export function HeroSection() {
             errorMessage = errorData.error || "Network connection failed. Please check your connection.";
           } else if (errorCode === "TIMEOUT_ERROR") {
             errorMessage = errorData.error || "The request took too long. Please try again.";
+          } else if (errorCode === "subscription_required") {
+            errorMessage = errorData.error || "Please subscribe to continue decoding listings.";
           }
         } catch {
           // If JSON parsing fails, use status-based messages
@@ -81,6 +86,35 @@ export function HeroSection() {
       setError(err instanceof Error ? err.message : "An unexpected error occurred. Please try again.");
       setLoading(false);
     }
+  }, []);
+
+  // Retry decode after successful sign-up
+  useEffect(() => {
+    if (isSignedIn && pendingDecode && userLoaded) {
+      // User just signed up, retry the decode
+      performDecode(pendingDecode.address, pendingDecode.workAddress);
+      setPendingDecode(null);
+      setShowSignUp(false);
+    }
+  }, [isSignedIn, pendingDecode, userLoaded, performDecode]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Wait for user to load
+    if (!userLoaded) {
+      return;
+    }
+
+    // If not signed in, show sign-up modal and store the decode request
+    if (!isSignedIn) {
+      setPendingDecode({ address, workAddress });
+      setShowSignUp(true);
+      return;
+    }
+
+    // User is signed in, proceed with decode
+    await performDecode(address, workAddress);
   };
 
   return (
@@ -152,6 +186,55 @@ export function HeroSection() {
             See sample decodes
           </Link>
         </div>
+
+        {/* Sign-Up Modal */}
+        {showSignUp && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="relative w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
+              <button
+                onClick={() => {
+                  setShowSignUp(false);
+                  setPendingDecode(null);
+                }}
+                className="absolute right-4 top-4 text-[#1E1E1E]/40 hover:text-[#1E1E1E]"
+                aria-label="Close"
+              >
+                <svg
+                  className="h-6 w-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+              <div className="mb-6">
+                <h2 className="mb-2 text-2xl font-black text-[#1E1E1E]">
+                  Sign up to decode listings
+                </h2>
+                <p className="text-[#1E1E1E]/70">
+                  New users get <span className="font-semibold text-[#DC2626]">one free listing check</span> when you sign up!
+                </p>
+              </div>
+              <SignUp
+                routing="virtual"
+                appearance={{
+                  elements: {
+                    rootBox: "w-full",
+                    card: "shadow-none",
+                  },
+                }}
+                afterSignUpUrl="/"
+                afterSignInUrl="/"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Right Column: Mascot Illustration */}
         <div className="relative flex items-center justify-center lg:justify-end">

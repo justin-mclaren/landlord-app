@@ -168,10 +168,12 @@ function ScoreItem({
       <div className="mb-1 text-xs text-zinc-600 dark:text-zinc-400">
         {label}
       </div>
-      <div className="text-xs text-zinc-500 dark:text-zinc-500" title={rationale}>
+      <div
+        className="text-xs text-zinc-500 dark:text-zinc-500"
+        title={rationale}
+      >
         {rationale.slice(0, 30)}...
       </div>
     </div>
   );
 }
-

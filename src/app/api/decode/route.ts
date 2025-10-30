@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
     // Check freemium access - requires authentication
     const { userId } = await auth();
-    
+
     if (!userId) {
       throw new ValidationError(
         "Please sign in to decode listings. New users get one free check!",
@@ -66,14 +66,14 @@ export async function POST(request: Request) {
         }
       );
     }
-    
+
     // Check if user has used their free check
     const usedFreeCheck = await hasUsedFreeCheck(userId);
-    
+
     if (usedFreeCheck) {
       // If they've used free check, require active subscription
       const hasSubscription = await hasActiveSubscription(userId);
-      
+
       if (!hasSubscription) {
         throw new ValidationError(
           "You've used your free listing check. Please subscribe to continue decoding listings.",
