@@ -266,6 +266,31 @@ export async function extractAddressFromZillowUrl(
   try {
     const address = await fetchZillowAddress(url);
     if (address && isFullAddress(address)) {
+      // Cache the extracted address for future use
+      // Create a minimal listing structure just for caching
+      const minimalListing: ListingJSON = {
+        source: {
+          url,
+          fetched_at: new Date().toISOString(),
+          provider: "scrape",
+          version: "v1",
+        },
+        listing: {
+          address,
+          city: "",
+          state: "",
+          price: null,
+          price_currency: "USD",
+          price_type: "rent",
+          beds: null,
+          baths: null,
+          sqft: null,
+          features: [],
+          description_raw: null,
+        },
+      };
+      // Cache it (even though it's incomplete - just for address lookup)
+      await set(cacheKeyStr, minimalListing, { ttl: CACHE_TTL.SCRAPE });
       return address;
     }
   } catch (error) {
