@@ -201,6 +201,119 @@ export function mergeListings(
 }
 
 /**
+ * Extract property name and location from Zillow apartment URL
+ * Example: /apartments/costa-mesa-ca/newport-palms-apartments/5Xk36V/
+ * Returns: { propertyName: "Newport Palms Apartments", city: "Costa Mesa", state: "CA" }
+ */
+function parseZillowApartmentUrl(url: string): {
+  propertyName: string;
+  city: string;
+  state: string;
+} | null {
+  try {
+    const urlObj = new URL(url);
+    if (!urlObj.hostname.toLowerCase().includes("zillow.com")) {
+      return null;
+    }
+
+    // Pattern: /apartments/city-state/property-name/ID/
+    const match = urlObj.pathname.match(/\/apartments\/([^/]+)\/([^/]+)\//);
+    if (!match) {
+      return null;
+    }
+
+    const cityStatePart = match[1]; // e.g., "costa-mesa-ca"
+    const propertyNamePart = match[2]; // e.g., "newport-palms-apartments"
+
+    // Parse city-state: "costa-mesa-ca" -> { city: "Costa Mesa", state: "CA" }
+    const cityStateMatch = cityStatePart.match(/^(.+?)-([a-z]{2})$/i);
+    if (!cityStateMatch) {
+      return null;
+    }
+
+    const city = cityStateMatch[1]
+      .split("-")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(" ");
+    const state = cityStateMatch[2].toUpperCase();
+
+    // Convert property name: "newport-palms-apartments" -> "Newport Palms Apartments"
+    const propertyName = propertyNamePart
+      .split("-")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(" ");
+
+    return { propertyName, city, state };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Geocode property name + city/state to get full address
+ * Uses Nominatim (OpenStreetMap) - free, no API key needed
+ */
+async function geocodePropertyName(
+  propertyName: string,
+  city: string,
+  state: string
+): Promise<string | null> {
+  try {
+    // Search for property name + city + state
+    const query = `${propertyName}, ${city}, ${state}`;
+    const encoded = encodeURIComponent(query);
+    const url = `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=5&addressdetails=1`;
+    
+    console.log(`Geocoding property: ${query}`);
+    
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Landlord Decoder (contact@example.com)",
+      },
+    });
+
+    if (!response.ok) {
+      console.warn(`Geocoding failed with status ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      console.warn(`No results found for: ${query}`);
+      return null;
+    }
+
+    // Try to find the best match (prefer results with house_number/road)
+    for (const result of data) {
+      const addr = result.address;
+      if (addr && addr.house_number && addr.road) {
+        const address = `${addr.house_number} ${addr.road}, ${addr.city || addr.town || city}, ${addr.state || state} ${addr.postcode || ""}`.trim();
+        console.log(`Found address via geocoding: ${address}`);
+        if (isFullAddress(address)) {
+          return address;
+        }
+      }
+    }
+
+    // Fallback: use first result if it has a road
+    const firstResult = data[0];
+    if (firstResult.address?.road) {
+      const addr = firstResult.address;
+      const address = `${addr.house_number || ""} ${addr.road}`.trim() + `, ${addr.city || addr.town || city}, ${addr.state || state} ${addr.postcode || ""}`.trim();
+      console.log(`Found address (fallback): ${address}`);
+      if (isFullAddress(address)) {
+        return address;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error(`Error geocoding property name:`, error);
+    return null;
+  }
+}
+
+/**
  * Extract just the address from a Zillow URL
  * Checks cached scraped data first, then tries to get from browser extension cache
  * If not cached, attempts lightweight server-side fetch to extract address from HTML
@@ -252,6 +365,47 @@ export async function extractAddressFromZillowUrl(
     isFullAddress(scraped.listing.address)
   ) {
     return scraped.listing.address;
+  }
+
+  // Try geocoding with property name + city/state (for apartment URLs)
+  // This is more reliable than scraping and doesn't trigger CAPTCHA
+  const urlParts = parseZillowApartmentUrl(url);
+  if (urlParts) {
+    console.log(`Attempting to geocode property: ${urlParts.propertyName}, ${urlParts.city}, ${urlParts.state}`);
+    const address = await geocodePropertyName(
+      urlParts.propertyName,
+      urlParts.city,
+      urlParts.state
+    );
+    
+    if (address && isFullAddress(address)) {
+      console.log(`Successfully geocoded address: ${address}`);
+      // Cache the extracted address for future use
+      const minimalListing: ListingJSON = {
+        source: {
+          url,
+          fetched_at: new Date().toISOString(),
+          provider: "scrape",
+          version: "v1",
+        },
+        listing: {
+          address,
+          city: urlParts.city,
+          state: urlParts.state,
+          price: undefined,
+          price_currency: "USD",
+          price_type: "rent",
+          beds: undefined,
+          baths: undefined,
+          sqft: undefined,
+          features: [],
+          description_raw: undefined,
+        },
+      };
+      // Cache it for future use
+      await set(cacheKeyStr, minimalListing, { ttl: CACHE_TTL.SCRAPE });
+      return address;
+    }
   }
 
   // If not in cache, try lightweight server-side fetch to extract address
