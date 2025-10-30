@@ -7,7 +7,7 @@
  */
 import { normalizeInput, isFullAddress } from "@/lib/normalize";
 import { getRentCastListing, hasCoreFields } from "@/lib/rentcast";
-import { getScrapedListing, mergeListings } from "@/lib/scrape";
+import { getScrapedListing, mergeListings, extractAddressFromZillowUrl } from "@/lib/scrape";
 import { augmentProperty } from "@/lib/augment";
 import { getOrCreateDecoderReport } from "@/lib/decoder";
 import { getOrCreateOGImage } from "@/lib/og-image";
@@ -60,47 +60,65 @@ export async function executeDecodeFlow(
   });
 
   let listing: ListingJSON | null = null;
-  const hasFullAddress = normalized.address ? isFullAddress(normalized.address) : false;
+  const hasFullAddress = normalized.address
+    ? isFullAddress(normalized.address)
+    : false;
 
-  // For apartment URLs: if we only have city/state (not full address), rely on scraping
+  // For Zillow URLs: if we only have city/state (not full address), try to extract address from page
   if (normalized.sourceMeta.url && !hasFullAddress) {
-    if (process.env.FEATURE_SCRAPE_FALLBACK === "true") {
+    const urlObj = new URL(normalized.sourceMeta.url);
+    const isZillowUrl = urlObj.hostname.toLowerCase().includes("zillow.com");
+
+    if (isZillowUrl && process.env.FEATURE_SCRAPE_FALLBACK === "true") {
       onProgress?.({
         step: "property",
         progress: 0.32,
-        message: "Fetching property data from page...",
+        message: "Extracting address from page...",
       });
 
-      const scraped = await getScrapedListing(normalized.sourceMeta.url);
-      if (scraped && hasCoreFields(scraped)) {
-        listing = scraped;
-        
-        // If scraping provided a full address, optionally enrich with RentCast
-        if (listing.listing.address && isFullAddress(listing.listing.address)) {
-          onProgress?.({
-            step: "property",
-            progress: 0.35,
-            message: "Enriching with RentCast data...",
-          });
-          
-          const rentcastData = await getRentCastListing(
-            listing.listing.address,
-            normalized.sourceMeta.url
-          );
-          
-          if (rentcastData && hasCoreFields(rentcastData)) {
-            // Merge scraped + RentCast (prefer RentCast for structured fields)
-            listing = mergeListings(rentcastData, scraped);
+      // Try to extract full address from Zillow page (from cached scraped data)
+      const extractedAddress = await extractAddressFromZillowUrl(normalized.sourceMeta.url);
+
+      if (extractedAddress && isFullAddress(extractedAddress)) {
+        // We got a full address from scraping - use it with RentCast
+        onProgress?.({
+          step: "property",
+          progress: 0.35,
+          message: "Fetching property data...",
+        });
+
+        listing = await getRentCastListing(
+          extractedAddress,
+          normalized.sourceMeta.url
+        );
+
+        // If RentCast is missing fields, merge with scraped data
+        if (listing && !hasCoreFields(listing)) {
+          const scraped = await getScrapedListing(normalized.sourceMeta.url);
+          if (scraped) {
+            listing = mergeListings(listing, scraped);
             console.log(
-              `Enriched scraped data with RentCast for ${normalized.sourceMeta.url}`
+              `Merged RentCast + scraped data for ${normalized.sourceMeta.url}`
             );
           }
         }
+      } else {
+        // Couldn't extract address - fall back to full scraping
+        onProgress?.({
+          step: "property",
+          progress: 0.32,
+          message: "Fetching property data from page...",
+        });
+
+        const scraped = await getScrapedListing(normalized.sourceMeta.url);
+        if (scraped && hasCoreFields(scraped)) {
+          listing = scraped;
+        }
       }
-    } else {
+    } else if (!isZillowUrl || process.env.FEATURE_SCRAPE_FALLBACK !== "true") {
       throw new Error(
         "Cannot process apartment URL without full address. " +
-        "Please enable scraping fallback (FEATURE_SCRAPE_FALLBACK=true) or provide the full address."
+          "Please enable scraping fallback (FEATURE_SCRAPE_FALLBACK=true) or provide the full address."
       );
     }
   } else if (hasFullAddress) {
@@ -110,7 +128,7 @@ export async function executeDecodeFlow(
       progress: 0.32,
       message: "Fetching property data...",
     });
-    
+
     listing = await getRentCastListing(
       normalized.address,
       normalized.sourceMeta.url

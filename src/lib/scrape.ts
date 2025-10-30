@@ -6,7 +6,8 @@
 
 import type { ListingJSON } from "@/types/listing";
 import { urlHash } from "@/lib/hash";
-import { getOrSet, cacheKey, CACHE_PREFIXES, CACHE_TTL } from "@/lib/cache";
+import { getOrSet, cacheKey, CACHE_PREFIXES, CACHE_TTL, get } from "@/lib/cache";
+import { isFullAddress } from "@/lib/normalize";
 
 /**
  * Scraped data structure from browser extension
@@ -33,7 +34,9 @@ export type ScrapedData = {
  * Extract property data from scraped HTML/DOM
  * Parses common patterns from Zillow, Apartments.com, etc.
  */
-function parseScrapedData(scraped: ScrapedData): Partial<ListingJSON["listing"]> {
+function parseScrapedData(
+  scraped: ScrapedData
+): Partial<ListingJSON["listing"]> {
   const result: Partial<ListingJSON["listing"]> = {};
 
   // Try to extract from metadata first (if browser extension provides it)
@@ -53,7 +56,11 @@ function parseScrapedData(scraped: ScrapedData): Partial<ListingJSON["listing"]>
         result.price_currency = "USD";
         // Determine if rent or buy based on keywords
         const priceLower = meta.price.toLowerCase();
-        if (priceLower.includes("rent") || priceLower.includes("/month") || priceLower.includes("/mo")) {
+        if (
+          priceLower.includes("rent") ||
+          priceLower.includes("/month") ||
+          priceLower.includes("/mo")
+        ) {
           result.price_type = "rent";
         } else if (priceLower.includes("buy") || priceLower.includes("sale")) {
           result.price_type = "buy";
@@ -105,7 +112,9 @@ function parseScrapedData(scraped: ScrapedData): Partial<ListingJSON["listing"]>
 
   // Extract city/state/zip from address if available
   if (result.address) {
-    const addressMatch = result.address.match(/(.+?),\s*(.+?),\s*([A-Z]{2})(?:\s+(\d{5}))?/i);
+    const addressMatch = result.address.match(
+      /(.+?),\s*(.+?),\s*([A-Z]{2})(?:\s+(\d{5}))?/i
+    );
     if (addressMatch) {
       result.city = addressMatch[2].trim();
       result.state = addressMatch[3].trim().toUpperCase();
@@ -171,7 +180,8 @@ export function mergeListings(
       zip: rentcast.listing.zip || scraped.listing.zip,
       // Prefer RentCast for structured data
       price: rentcast.listing.price ?? scraped.listing.price,
-      price_currency: rentcast.listing.price_currency || scraped.listing.price_currency,
+      price_currency:
+        rentcast.listing.price_currency || scraped.listing.price_currency,
       price_type: rentcast.listing.price_type || scraped.listing.price_type,
       beds: rentcast.listing.beds ?? scraped.listing.beds,
       baths: rentcast.listing.baths ?? scraped.listing.baths,
@@ -182,11 +192,61 @@ export function mergeListings(
         ...(scraped.listing.features || []),
       ].filter((f, i, arr) => arr.indexOf(f) === i), // Deduplicate
       // Prefer scraped description if RentCast doesn't have one
-      description_raw: rentcast.listing.description_raw || scraped.listing.description_raw,
+      description_raw:
+        rentcast.listing.description_raw || scraped.listing.description_raw,
     },
   };
 
   return merged;
+}
+
+/**
+ * Extract just the address from a Zillow URL
+ * Checks cached scraped data first, then tries to get from browser extension cache
+ * Returns the address string if found, null otherwise
+ * 
+ * This allows us to derive an address from a Zillow URL and then use it with RentCast
+ */
+export async function extractAddressFromZillowUrl(
+  url: string
+): Promise<string | null> {
+  // Feature flag check
+  if (process.env.FEATURE_SCRAPE_FALLBACK !== "true") {
+    return null;
+  }
+
+  // Only work with Zillow URLs
+  try {
+    const urlObj = new URL(url);
+    if (!urlObj.hostname.toLowerCase().includes("zillow.com")) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+
+  const hash = urlHash(url);
+  const version = "v1";
+  const cacheKeyStr = cacheKey(CACHE_PREFIXES.SCRAPE, hash, version);
+
+  try {
+    // Check if we already have scraped data cached for this URL
+    const cached = await get<ListingJSON>(cacheKeyStr);
+    if (cached && cached.listing.address && isFullAddress(cached.listing.address)) {
+      return cached.listing.address;
+    }
+  } catch {
+    // Continue to try other methods
+  }
+
+  // Try to get from browser extension cache (via getScrapedListing)
+  // This checks if browser extension has already scraped and cached this URL
+  const scraped = await getScrapedListing(url);
+  if (scraped && scraped.listing.address && isFullAddress(scraped.listing.address)) {
+    return scraped.listing.address;
+  }
+
+  return null;
 }
 
 /**
@@ -228,4 +288,3 @@ export async function getScrapedListing(
     }
   );
 }
-
