@@ -11,7 +11,10 @@ export function HeroSection() {
   const [workAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pendingDecode, setPendingDecode] = useState<{ address: string; workAddress: string } | null>(null);
+  const [pendingDecode, setPendingDecode] = useState<{
+    address: string;
+    workAddress: string;
+  } | null>(null);
 
   const performDecode = useCallback(async (addr: string, workAddr: string) => {
     setLoading(true);
@@ -42,30 +45,46 @@ export function HeroSection() {
 
           // Provide more specific error messages based on error code
           if (errorCode === "VALIDATION_ERROR") {
-            errorMessage = errorData.error || "Please check your input and try again.";
+            errorMessage =
+              errorData.error || "Please check your input and try again.";
           } else if (errorCode === "NOT_FOUND") {
-            errorMessage = errorData.error || "We couldn't find that property. Please check the address.";
+            errorMessage =
+              errorData.error ||
+              "We couldn't find that property. Please check the address.";
           } else if (errorCode === "DATA_QUALITY_ERROR") {
-            errorMessage = errorData.error || "The property data is incomplete. We couldn't generate a full report.";
+            errorMessage =
+              errorData.error ||
+              "The property data is incomplete. We couldn't generate a full report.";
           } else if (errorCode === "RATE_LIMIT_ERROR") {
-            errorMessage = errorData.error || "Too many requests. Please wait a moment and try again.";
+            errorMessage =
+              errorData.error ||
+              "Too many requests. Please wait a moment and try again.";
           } else if (errorCode === "API_ERROR") {
-            errorMessage = errorData.error || "We're having trouble fetching data. Please try again.";
+            errorMessage =
+              errorData.error ||
+              "We're having trouble fetching data. Please try again.";
           } else if (errorCode === "NETWORK_ERROR") {
-            errorMessage = errorData.error || "Network connection failed. Please check your connection.";
+            errorMessage =
+              errorData.error ||
+              "Network connection failed. Please check your connection.";
           } else if (errorCode === "TIMEOUT_ERROR") {
-            errorMessage = errorData.error || "The request took too long. Please try again.";
+            errorMessage =
+              errorData.error || "The request took too long. Please try again.";
           } else if (errorCode === "subscription_required") {
-            errorMessage = errorData.error || "Please subscribe to continue decoding listings.";
+            errorMessage =
+              errorData.error ||
+              "Please subscribe to continue decoding listings.";
           }
         } catch {
           // If JSON parsing fails, use status-based messages
           if (response.status === 400) {
-            errorMessage = "Invalid input. Please check your address and try again.";
+            errorMessage =
+              "Invalid input. Please check your address and try again.";
           } else if (response.status === 404) {
             errorMessage = "Property not found. Please check the address.";
           } else if (response.status === 429) {
-            errorMessage = "Too many requests. Please wait a moment and try again.";
+            errorMessage =
+              "Too many requests. Please wait a moment and try again.";
           } else if (response.status >= 500) {
             errorMessage = "Server error. Please try again later.";
           }
@@ -83,7 +102,11 @@ export function HeroSection() {
         throw new Error("No report URL returned from server");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An unexpected error occurred. Please try again.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "An unexpected error occurred. Please try again."
+      );
       setLoading(false);
     }
   }, []);
@@ -99,7 +122,7 @@ export function HeroSection() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validate address is entered
     if (!address.trim()) {
       setError("Please enter a property address");
@@ -125,7 +148,10 @@ export function HeroSection() {
   };
 
   return (
-    <section id="decode" className="mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16 lg:px-8 lg:py-20">
+    <section
+      id="decode"
+      className="mx-auto max-w-7xl px-4 py-12 md:px-6 md:py-16 lg:px-8 lg:py-20"
+    >
       <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
         {/* Left Column: Text Content */}
         <div className="flex flex-col justify-center">
@@ -138,8 +164,8 @@ export function HeroSection() {
             </p>
           </div>
           <p className="mb-8 text-lg leading-relaxed text-[#1E1E1E] md:text-xl">
-            Enter any property address – our AI exposes the truth behind landlord
-            lingo.
+            Enter any property address – our AI exposes the truth behind
+            landlord lingo.
           </p>
 
           {/* Input Form */}
@@ -196,7 +222,11 @@ export function HeroSection() {
 
         {/* Hidden SignUpButton to trigger modal programmatically */}
         <div className="hidden">
-          <SignUpButton mode="modal" fallbackRedirectUrl="/" forceRedirectUrl="/">
+          <SignUpButton
+            mode="modal"
+            fallbackRedirectUrl="/"
+            forceRedirectUrl="/"
+          >
             <button ref={signUpButtonRef} type="button" />
           </SignUpButton>
         </div>
@@ -224,4 +254,3 @@ export function HeroSection() {
     </section>
   );
 }
-

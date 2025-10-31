@@ -309,8 +309,8 @@ const { text } = await generateText({
 
 **Plans (example)**
 
-- **Free**: 5 decodes/month, watermark, rate‑limited.
-- **Pro** ($9.99/mo): 200 decodes/month, no watermark, batch decode, priority queue.
+- **Free**: 5 decodes/month, rate‑limited.
+- **Pro** ($9.99/mo): 200 decodes/month, batch decode, priority queue.
 - **Team** ($29/mo/seat)**(roadmap once per‑seat is live)**.
 
 **Entitlements & gating**
@@ -331,8 +331,7 @@ const { text } = await generateText({
 
 - **Pricing UI**: drop `<PricingTable />` into `/pricing`; link from upgrade walls.
 - **Checkout/Portal**: handled by Clerk—no custom Stripe routes needed; remove `/api/billing/checkout|portal|webhook` from MVP.
-- **Feature flags**: Map plan → features (e.g., `plan: 'pro'` → `features: ['batch_decode','no_watermark']`).
-- **Watermark**: conditionally render on `/d/[slug]` when `!has({ plan: 'pro' })`.
+- **Feature flags**: Map plan → features (e.g., `plan: 'pro'` → `features: ['batch_decode','unlimited_decodes']`).
 
 **Compliance & fees**
 

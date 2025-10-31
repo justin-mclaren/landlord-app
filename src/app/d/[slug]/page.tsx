@@ -65,6 +65,5 @@ export default async function ReportPage({
   const { listing, report } = mapping;
   const address = `${listing.listing.address}, ${listing.listing.city}, ${listing.listing.state}`;
 
-  // No watermark in freemium model - all reports are the same
   return <ReportView report={report} address={address} />;
 }
