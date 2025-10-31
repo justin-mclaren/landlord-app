@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useUser, SignUpButton } from "@clerk/nextjs";
+import { useUser, SignUpButton, UserButton } from "@clerk/nextjs";
 
 export function Header() {
-  const { isSignedIn } = useUser();
+  const { isSignedIn, isLoaded } = useUser();
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-[#1A1B2E]/10 bg-[#FFF8F0]">
@@ -52,19 +52,23 @@ export function Header() {
           >
             Pricing
           </Link>
-          {!isSignedIn ? (
+          {!isLoaded ? (
+            // Loading state - show nothing or a placeholder
+            <div className="h-8 w-8 rounded-full bg-gray-200 animate-pulse" />
+          ) : !isSignedIn ? (
             <SignUpButton mode="modal" fallbackRedirectUrl="/" forceRedirectUrl="/">
               <button className="rounded-full bg-[#DC2626] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#DC2626]/90">
                 Sign up
               </button>
             </SignUpButton>
           ) : (
-            <Link
-              href="/sign-in"
-              className="text-sm font-medium text-[#1E1E1E] transition-colors hover:text-[#DC2626]"
-            >
-              Sign in
-            </Link>
+            <UserButton
+              appearance={{
+                elements: {
+                  avatarBox: "h-8 w-8",
+                },
+              }}
+            />
           )}
         </nav>
       </div>
