@@ -55,8 +55,6 @@ src/
 │   │   └── page.tsx              # Pricing page
 │   ├── leaderboard/
 │   │   └── page.tsx              # Leaderboard page (placeholder)
-│   ├── sign-in/
-│   │   └── page.tsx              # Sign-in page (placeholder)
 │   ├── d/
 │   │   └── [slug]/
 │   │       └── page.tsx          # Report page (SSR/ISR)
@@ -282,19 +280,37 @@ Task:
 
 **Entitlements** (`lib/entitlements.ts`):
 
-- Check subscription status via Clerk user metadata: `hasActiveSubscription(userId)`
-- Server-side helper for checking active subscriptions
-- Currently checks `publicMetadata.subscriptionActive` and `publicMetadata.plan`
+- Uses Clerk's built-in subscription management via `auth().has({ plan: "Basic" })`
+- Plan names are capitalized: "Basic", "Pro"
+- No custom metadata tracking needed - Clerk handles subscription state automatically
+- Functions:
+  - `hasPlan(planName)` - Check if user has specific plan
+  - `hasFeature(featureName)` - Check if user has specific feature
+  - `getUserPlan()` - Get user's current plan ("Basic", "Pro", or null)
+  - `hasActiveSubscription(userId)` - Check if user has any active subscription
 
 **Quotas** (`lib/quotas.ts`):
 
-- **Current Implementation**: Free check tracking (one-time free decode per user)
-- Track via Vercel KV: `free_check:{userId}` with boolean flag
-- API route checks free check before allowing decode
-- After free check is used, requires active subscription
-- **Future**: Can extend to monthly quotas with `usage:{userId}:{YYYY-MM}` pattern
+- **Monthly Usage Tracking**: Tracks decodes per user per month via Vercel KV
+- Key format: `usage:{userId}:{YYYY-MM}` (e.g., `usage:user123:2025-01`)
+- Plan limits:
+  - **Trial** (7-day): 1 decode total (tracked separately)
+  - **Basic**: 5 decodes/month
+  - **Pro**: 50 decodes/month
+- Trial logic:
+  - Clerk automatically creates subscription in "trialing" state
+  - User gets 1 decode during trial period
+  - After trial ends, Clerk auto-renews to "Basic" plan
+  - Trial decode tracked separately: `trial_decode:{userId}`
+- Quota reset: Automatically resets monthly (webhook resets on `subscription.renewed`)
+- Functions:
+  - `canDecode(userId, plan)` - Check if user can decode (returns allowed, reason, remaining, limit)
+  - `incrementUsage(userId)` - Increment monthly usage count
+  - `getCurrentUsage(userId)` - Get current month's usage count
+  - `isInTrial(userId)` - Check if user is in trial period
+  - `hasUsedTrialDecode(userId)` - Check if trial decode has been used
 
-**Note**: Clerk Billing doesn't support metered billing yet; implement quotas manually. Current implementation uses simplified "free check" model instead of monthly quotas. Can migrate to monthly quotas or Clerk metered billing when available.
+**Note**: Clerk handles subscription lifecycle (trial → active → canceled). We only track usage quotas. Trial state is determined by checking if user has Basic plan but hasn't used trial decode yet.
 
 ---
 
@@ -324,9 +340,18 @@ Task:
 **Flow**:
 
 1. Validate input
-2. Check quota (via middleware)
-3. Start DecodeFlow workflow
-4. Return report URL (or jobId + polling endpoint for async)
+2. Check authentication (requires userId)
+3. Get user's plan from Clerk
+4. Check quota via `canDecode()`:
+   - If trial: Check if trial decode used (1 decode allowed)
+   - If Basic: Check monthly usage (5/month limit)
+   - If Pro: Check monthly usage (50/month limit)
+   - If no plan: Return error with upgrade prompt
+5. Start DecodeFlow workflow
+6. Track usage after successful decode:
+   - Trial: Mark trial decode as used
+   - Otherwise: Increment monthly usage count
+7. Return report URL (or jobId + polling endpoint for async)
 
 ---
 
@@ -402,7 +427,9 @@ Task:
 
 **Component**: `<PricingTable />` from Clerk
 
-- Render plans (Free, Pro, Team)
+- Render plans:
+  - **Basic**: $5/month or $48/year, 5 decodes/month, 7-day trial (1 decode)
+  - **Pro**: $9/month or $96/year, 50 decodes/month, no trial
 - Checkout handled by Clerk (no custom Stripe routes)
 - Fully integrated with Clerk Billing
 
@@ -411,7 +438,8 @@ Task:
 **Purpose**: Handle subscription lifecycle events from Clerk Billing
 
 - Handles: `subscription.created`, `subscription.updated`, `subscription.canceled`, `subscription.renewed`, `payment.succeeded`, `payment.failed`
-- Updates user metadata and caches subscription status
+- **Main action**: Resets monthly usage quotas on `subscription.renewed` event
+- Clerk handles subscription state automatically (no custom metadata updates needed)
 - Requires `CLERK_WEBHOOK_SECRET` environment variable
 
 ---
@@ -473,10 +501,11 @@ DECODER_MODEL=gpt-4o-mini|gpt-4.1|...
 
 ### Phase 4: Monetization & Launch (Week 4)
 
-- [x] Integrate Clerk Auth - middleware, layout, sign-in page
-- [ ] Set up Clerk Billing (plans, pricing table) - pricing page exists, needs Clerk PricingTable component
-- [x] Implement entitlements (`lib/entitlements.ts`) - subscription checking
-- [x] Implement quotas (`lib/quotas.ts`) - free check tracking (simplified from monthly quotas)
+- [x] Integrate Clerk Auth - middleware, layout (Clerk handles sign-in via modal)
+- [x] Set up Clerk Billing (plans, pricing table) - Basic ($5/month, 5 decodes) and Pro ($9/month, 50 decodes) plans with 7-day trial
+- [x] Implement entitlements (`lib/entitlements.ts`) - Uses Clerk's `auth().has()` for subscription checking
+- [x] Implement quotas (`lib/quotas.ts`) - Monthly usage tracking (Basic: 5/month, Pro: 50/month, Trial: 1 decode)
+- [x] Configure webhooks (`/api/webhooks/clerk`) - Resets quotas on subscription renewal
 - [ ] Add observability (logging, metrics) - basic console logging exists
 - [ ] Add cost controls (spend guardrails) - TBD
 - [x] Landing page polish - HeroSection, HowItWorksSection, SampleDecodesSection
@@ -620,17 +649,19 @@ When implementing features:
 
 ---
 
-**Last Updated**: 2025-01-27 - Clerk Billing implementation complete
+**Last Updated**: 2025-01-27 - Pricing plan implementation complete
 **Status**: 
 - Phase 1: ✅ Complete
 - Phase 2: ✅ Mostly complete (workflow uses async function, not Durable Workflows)
 - Phase 3: ✅ Complete
-- Phase 4: ✅ Mostly complete (Clerk Billing integrated, webhooks configured)
+- Phase 4: ✅ Mostly complete (Clerk Billing integrated, monthly quotas implemented, webhooks configured)
 
 **Key Changes from Original Plan**:
 - Using Vercel KV for caching (not "Vercel Data Cache")
 - Workflow is async function (not Durable Workflows yet)
-- Quotas simplified to "free check" model (not monthly quotas yet)
+- **Quotas**: Monthly usage tracking implemented (Basic: 5/month, Pro: 50/month, Trial: 1 decode)
+- **Entitlements**: Uses Clerk's built-in `auth().has()` - no custom metadata tracking
+- **Pricing Plans**: Basic ($5/month, 5 decodes) and Pro ($9/month, 50 decodes) with 7-day trial
 - Additional modules: `lib/storage.ts` (slug mappings), `lib/errors.ts` (error handling)
-- Additional pages: `/leaderboard` (placeholder), `/sign-in` (placeholder)
+- Additional pages: `/leaderboard` (placeholder)
 - Additional components: Header, HeroSection, HowItWorksSection, SampleDecodesSection

@@ -2,6 +2,10 @@
  * Clerk Webhooks Endpoint
  * Handles subscription lifecycle events from Clerk Billing
  * 
+ * Clerk automatically manages subscription state - we only need to:
+ * - Log events for debugging
+ * - Optionally reset usage quotas on renewal
+ * 
  * Webhook events to handle:
  * - subscription.created
  * - subscription.updated
@@ -16,45 +20,10 @@
 import { Webhook } from "svix";
 import { headers } from "next/headers";
 import { WebhookEvent } from "@clerk/nextjs/server";
-import { kv } from "@vercel/kv";
+import { resetUsage } from "@/lib/quotas";
 
 // Get webhook secret from environment variables
 const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
-
-/**
- * Update user metadata based on subscription status
- */
-async function updateUserSubscriptionMetadata(
-  userId: string,
-  plan: string | null,
-  subscriptionActive: boolean
-) {
-  try {
-    // Update user metadata via Clerk API
-    // Note: This requires Clerk Backend API - you'll need to use Clerk's API client
-    // For now, we'll just log it. The actual update happens via Clerk's webhook system
-    // or you can update it via Clerk Dashboard API
-    
-    console.log("Subscription metadata update:", {
-      userId,
-      plan,
-      subscriptionActive,
-    });
-
-    // Store subscription status in KV for quick access (optional cache layer)
-    await kv.set(
-      `subscription:${userId}`,
-      {
-        plan,
-        active: subscriptionActive,
-        updatedAt: new Date().toISOString(),
-      },
-      { ex: 7 * 24 * 60 * 60 } // 7 days TTL
-    );
-  } catch (error) {
-    console.error("Error updating subscription metadata:", error);
-  }
-}
 
 export async function POST(request: Request) {
   // Verify webhook signature
@@ -104,52 +73,36 @@ export async function POST(request: Request) {
 
   try {
     switch (eventType) {
+      case "subscription.renewed": {
+        // Reset monthly usage quota when subscription renews
+        const subscriptionData = (data as any).subscription || data;
+        const userId = subscriptionData.user_id || (data as any).user_id;
+        
+        if (userId) {
+          // Reset usage for the new billing cycle
+          await resetUsage(userId);
+          console.log(`Reset usage quota for user ${userId} on subscription renewal`);
+        }
+        break;
+      }
+
       case "subscription.created":
       case "subscription.updated":
-      case "subscription.renewed": {
-        // Extract subscription data
-        // Note: Actual structure depends on Clerk's webhook payload
+      case "subscription.canceled":
+      case "payment.succeeded":
+      case "payment.failed": {
+        // Clerk handles subscription state automatically
+        // Just log for debugging
         const subscriptionData = (data as any).subscription || data;
         const userId = subscriptionData.user_id || (data as any).user_id;
         const plan = subscriptionData.plan || subscriptionData.plan_name;
-        const active = subscriptionData.status === "active";
-
-        if (userId) {
-          await updateUserSubscriptionMetadata(userId, plan, active);
-        }
-        break;
-      }
-
-      case "subscription.canceled": {
-        const subscriptionData = (data as any).subscription || data;
-        const userId = subscriptionData.user_id || (data as any).user_id;
-
-        if (userId) {
-          await updateUserSubscriptionMetadata(userId, null, false);
-        }
-        break;
-      }
-
-      case "payment.succeeded": {
-        // Payment succeeded - subscription should be active
-        const paymentData = (data as any).payment || data;
-        const userId = paymentData.user_id || (data as any).user_id;
-        const plan = paymentData.plan || paymentData.plan_name;
-
-        if (userId && plan) {
-          await updateUserSubscriptionMetadata(userId, plan, true);
-        }
-        break;
-      }
-
-      case "payment.failed": {
-        // Payment failed - may need to handle grace period or suspend access
-        const paymentData = (data as any).payment || data;
-        const userId = paymentData.user_id || (data as any).user_id;
-
-        console.warn(`Payment failed for user ${userId}`);
-        // You might want to send notification or update user status
-        // For now, we'll keep subscription active (grace period handling)
+        const status = subscriptionData.status;
+        
+        console.log(`Subscription event: ${eventType}`, {
+          userId,
+          plan,
+          status,
+        });
         break;
       }
 

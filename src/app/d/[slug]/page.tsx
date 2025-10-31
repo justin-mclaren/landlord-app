@@ -65,5 +65,5 @@ export default async function ReportPage({
   const { listing, report } = mapping;
   const address = `${listing.listing.address}, ${listing.listing.city}, ${listing.listing.state}`;
 
-  return <ReportView report={report} address={address} />;
+  return <ReportView report={report} address={address} listing={listing} />;
 }

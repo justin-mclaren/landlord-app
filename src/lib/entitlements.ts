@@ -1,70 +1,17 @@
 /**
  * Subscription Status Check
  * Helper functions to check subscription status and plan features via Clerk Billing
- * 
+ *
  * Clerk Billing API: https://clerk.com/docs/guides/billing/overview
+ * Uses Clerk's built-in subscription management - no custom metadata tracking needed
  */
 
-import { auth, currentUser } from "@clerk/nextjs/server";
-
-/**
- * Check if user has an active subscription
- * Uses Clerk's auth().has() method to check for any active subscription plan
- */
-export async function hasActiveSubscription(
-  userId: string | null | undefined
-): Promise<boolean> {
-  if (!userId) {
-    return false;
-  }
-
-  try {
-    const { has } = await auth();
-    
-    // Check if user has any active subscription plan
-    // Clerk's has() method checks subscription status automatically
-    // You can check for specific plans like: has({ plan: 'pro' })
-    // Or check for any plan by checking for subscription-related features
-    
-    // Check for common subscription indicators
-    // Adjust these based on your actual plan names/features in Clerk Dashboard
-    const hasProPlan = await has({ plan: "pro" });
-    const hasTeamPlan = await has({ plan: "team" });
-    const hasFreePlan = await has({ plan: "free" });
-    
-    // If they have any paid plan, they have an active subscription
-    return hasProPlan || hasTeamPlan;
-  } catch (error) {
-    console.error("Error checking subscription status:", error);
-    
-    // Fallback: check user metadata (set by webhooks)
-    try {
-      const user = await currentUser();
-      if (!user) {
-        return false;
-      }
-
-      // Clerk webhooks set subscription status in publicMetadata
-      const subscriptionActive = user.publicMetadata?.subscriptionActive as
-        | boolean
-        | undefined;
-      const plan = user.publicMetadata?.plan as string | undefined;
-
-      // Check if they have an active subscription or a paid plan
-      return (
-        subscriptionActive === true ||
-        (plan !== undefined && plan !== "free" && plan !== null)
-      );
-    } catch (fallbackError) {
-      console.error("Fallback subscription check failed:", fallbackError);
-      return false;
-    }
-  }
-}
+import { auth } from "@clerk/nextjs/server";
 
 /**
  * Check if user has a specific plan
- * @param planName - Plan name to check (e.g., 'pro', 'team', 'free')
+ * Plan names are capitalized: "Basic", "Pro"
+ * @param planName - Plan name to check (e.g., 'Basic', 'Pro')
  */
 export async function hasPlan(planName: string): Promise<boolean> {
   try {
@@ -72,15 +19,7 @@ export async function hasPlan(planName: string): Promise<boolean> {
     return await has({ plan: planName });
   } catch (error) {
     console.error(`Error checking plan ${planName}:`, error);
-    
-    // Fallback: check user metadata
-    try {
-      const user = await currentUser();
-      const plan = user?.publicMetadata?.plan as string | undefined;
-      return plan === planName;
-    } catch {
-      return false;
-    }
+    return false;
   }
 }
 
@@ -100,29 +39,76 @@ export async function hasFeature(featureName: string): Promise<boolean> {
 }
 
 /**
- * Get user's current plan name
- * Returns the plan name or null if no plan found
+ * Get user's current plan name from Clerk
+ * Returns capitalized plan name: "Basic", "Pro", or null
  */
 export async function getUserPlan(): Promise<string | null> {
   try {
-    const user = await currentUser();
-    if (!user) {
-      return null;
-    }
-
-    // First try to get from Clerk's subscription data via has()
     const { has } = await auth();
-    
-    // Check common plans
-    if (await has({ plan: "pro" })) return "pro";
-    if (await has({ plan: "team" })) return "team";
-    if (await has({ plan: "free" })) return "free";
 
-    // Fallback: check metadata (set by webhooks)
-    const plan = user.publicMetadata?.plan as string | undefined;
-    return plan || null;
+    // Check plans in order (Pro > Basic)
+    // Clerk handles plan names as-is (capitalized)
+    if (await has({ plan: "Pro" })) return "Pro";
+    if (await has({ plan: "Basic" })) return "Basic";
+
+    return null;
   } catch (error) {
     console.error("Error getting user plan:", error);
     return null;
+  }
+}
+
+/**
+ * Get user's subscription status from Clerk
+ * Returns 'trialing', 'active', 'canceled', or null
+ * Clerk automatically tracks subscription status
+ */
+export async function getSubscriptionStatus(): Promise<string | null> {
+  try {
+    const { has } = await auth();
+
+    // Check if user has any plan (Clerk handles status internally)
+    // If has() returns true, subscription is active or trialing
+    const hasBasic = await has({ plan: "Basic" });
+    const hasPro = await has({ plan: "Pro" });
+
+    if (hasBasic || hasPro) {
+      // Clerk's has() returns true for both active and trialing subscriptions
+      // To distinguish, we'd need to check the subscription object directly
+      // For now, assume active if has() returns true
+      // Trial status is handled by checking if trial decode hasn't been used yet
+      return "active";
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error getting subscription status:", error);
+    return null;
+  }
+}
+
+/**
+ * Check if user has an active subscription (Basic or Pro)
+ * Includes trialing subscriptions (Clerk handles trial state automatically)
+ */
+export async function hasActiveSubscription(
+  userId: string | null | undefined
+): Promise<boolean> {
+  if (!userId) {
+    return false;
+  }
+
+  try {
+    const { has } = await auth();
+
+    // Check if user has any paid plan
+    // Clerk's has() returns true for both active and trialing subscriptions
+    const hasBasic = await has({ plan: "Basic" });
+    const hasPro = await has({ plan: "Pro" });
+
+    return hasBasic || hasPro;
+  } catch (error) {
+    console.error("Error checking subscription status:", error);
+    return false;
   }
 }

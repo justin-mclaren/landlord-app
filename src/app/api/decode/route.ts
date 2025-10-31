@@ -3,7 +3,7 @@
  * Main decode endpoint - starts the decode workflow
  */
 import { NextResponse } from "next/server";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { executeDecodeFlowSafe } from "@/flows/decode";
 import type { DecodeFlowInput } from "@/types/workflow";
 import {
@@ -13,8 +13,8 @@ import {
   getUserMessage,
   getErrorCode,
 } from "@/lib/errors";
-import { hasUsedFreeCheck, markFreeCheckUsed } from "@/lib/quotas";
-import { hasActiveSubscription } from "@/lib/entitlements";
+import { canDecode, incrementUsage } from "@/lib/quotas";
+import { getUserPlan } from "@/lib/entitlements";
 
 export async function POST(request: Request) {
   try {
@@ -59,30 +59,43 @@ export async function POST(request: Request) {
 
     if (!userId) {
       throw new ValidationError(
-        "Please sign in to decode listings. New users get one free check!",
+        "Please sign in to decode listings. Try 1 free decode with a 7-day trial!",
         "authentication_required",
         {
-          signInUrl: "/sign-in",
+          upgradeUrl: "/pricing",
         }
       );
     }
 
-    // Check if user has used their free check
-    const usedFreeCheck = await hasUsedFreeCheck(userId);
+    // Get user's plan (Clerk handles subscription status automatically)
+    const plan = await getUserPlan();
 
-    if (usedFreeCheck) {
-      // If they've used free check, require active subscription
-      const hasSubscription = await hasActiveSubscription(userId);
+    // Check if user can decode based on plan and usage
+    const quotaCheck = await canDecode(userId, plan);
 
-      if (!hasSubscription) {
-        throw new ValidationError(
-          "You've used your free listing check. Please subscribe to continue decoding listings.",
-          "subscription_required",
-          {
-            upgradeUrl: "/pricing",
-          }
-        );
+    if (!quotaCheck.allowed) {
+      // Determine error message based on reason
+      let errorMessage = quotaCheck.reason || "Subscription required";
+      let errorCode = "subscription_required";
+
+      if (quotaCheck.reason?.includes("Trial decode")) {
+        errorMessage =
+          "Your trial decode has been used. Upgrade to Basic ($5/month) or Pro ($9/month) to continue decoding listings.";
+        errorCode = "trial_expired";
+      } else if (quotaCheck.reason?.includes("Monthly limit")) {
+        errorMessage = `You've reached your monthly limit of ${quotaCheck.limit} decodes. Upgrade to Pro for 50 decodes/month, or wait for your plan to renew.`;
+        errorCode = "quota_exceeded";
+      } else if (quotaCheck.reason?.includes("No active subscription")) {
+        errorMessage =
+          "Subscribe to Basic ($5/month, 5 decodes) or Pro ($9/month, 50 decodes) to continue decoding listings.";
+        errorCode = "subscription_required";
       }
+
+      throw new ValidationError(errorMessage, errorCode, {
+        upgradeUrl: "/pricing",
+        remaining: quotaCheck.remaining,
+        limit: quotaCheck.limit,
+      });
     }
 
     // Execute decode flow
@@ -96,15 +109,26 @@ export async function POST(request: Request) {
       );
     });
 
-    // Mark free check as used after successful decode
+    // Track usage after successful decode
     // userId is guaranteed to exist here due to auth check above
     try {
-      const usedFreeCheck = await hasUsedFreeCheck(userId!);
-      if (!usedFreeCheck) {
-        await markFreeCheckUsed(userId!);
+      // Check if user is in trial
+      const { isInTrial, hasUsedTrialDecode, markTrialDecodeUsed } =
+        await import("@/lib/quotas");
+      const inTrial = await isInTrial(userId);
+
+      if (inTrial) {
+        // Mark trial decode as used
+        const trialUsed = await hasUsedTrialDecode(userId);
+        if (!trialUsed) {
+          await markTrialDecodeUsed(userId);
+        }
+      } else {
+        // Otherwise, increment monthly usage
+        await incrementUsage(userId);
       }
     } catch (error) {
-      console.error("Failed to mark free check as used (non-blocking):", error);
+      console.error("Failed to track usage (non-blocking):", error);
       // Don't fail the request if tracking fails
     }
 
