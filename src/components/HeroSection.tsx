@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useUser, SignUpButton } from "@clerk/nextjs";
+import { AddressAutocomplete } from "./AddressAutocomplete";
 
 export function HeroSection() {
   const { isSignedIn, isLoaded: userLoaded } = useUser();
@@ -170,32 +171,13 @@ export function HeroSection() {
 
           {/* Input Form */}
           <form onSubmit={handleSubmit} className="mb-6 space-y-4">
-            <div className="relative">
-              <input
-                type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="Enter property address"
-                className="w-full rounded-2xl border-2 border-[#1E1E1E]/20 bg-white px-6 py-4 pl-12 text-base text-[#1E1E1E] placeholder-[#1E1E1E]/50 focus:border-[#DC2626] focus:outline-none focus:ring-2 focus:ring-[#DC2626]/20"
-                disabled={loading}
-                required
-              />
-              <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                <svg
-                  className="h-5 w-5 text-[#1E1E1E]/40"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-              </div>
-            </div>
+            <AddressAutocomplete
+              value={address}
+              onChange={setAddress}
+              placeholder="Enter property address"
+              disabled={loading}
+              className="w-full rounded-2xl border-2 border-[#1E1E1E]/20 bg-white px-6 py-4 pl-12 pr-12 text-base text-[#1E1E1E] placeholder-[#1E1E1E]/50 focus:border-[#DC2626] focus:outline-none focus:ring-2 focus:ring-[#DC2626]/20"
+            />
 
             {error && (
               <div className="rounded-xl border-2 border-[#DC2626]/30 bg-[#DC2626]/10 p-4 text-sm text-[#DC2626]">
