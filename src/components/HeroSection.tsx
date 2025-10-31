@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useUser, SignUpButton } from "@clerk/nextjs";
-import { AddressAutocomplete } from "./AddressAutocomplete";
+import { GooglePlacesAutocomplete } from "./GooglePlacesAutocomplete";
 
 export function HeroSection() {
   const { isSignedIn, isLoaded: userLoaded } = useUser();
@@ -171,7 +171,7 @@ export function HeroSection() {
 
           {/* Input Form */}
           <form onSubmit={handleSubmit} className="mb-6 space-y-4">
-            <AddressAutocomplete
+            <GooglePlacesAutocomplete
               value={address}
               onChange={setAddress}
               placeholder="Enter property address"

@@ -454,7 +454,8 @@ APP_URL=https://yourapp.com
 
 # Optional
 SCRAPE_PROVIDER_KEY=... # ZenRows/Apify
-MAPBOX_TOKEN=...
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=... # Google Maps API key for address autocomplete (Places UI Kit)
+MAPBOX_TOKEN=... # Used for geocoding in augmentation (can use Nominatim fallback)
 CLERK_SECRET_KEY=...
 CLERK_WEBHOOK_SECRET=... # Clerk webhook signing secret (for billing events)
 KV_REST_API_URL=... # Vercel KV for quotas

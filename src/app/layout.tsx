@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import localFont from "next/font/local";
 import { ClerkProvider } from "@clerk/nextjs";
+import Script from "next/script";
 import "./globals.css";
 
 const inter = Inter({
@@ -35,12 +36,20 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
   return (
     <ClerkProvider>
       <html lang="en">
         <body
           className={`${inter.variable} ${satoshiBlack.variable} antialiased`}
         >
+          {googleMapsApiKey && (
+            <Script
+              src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&loading=async&libraries=places`}
+              strategy="lazyOnload"
+            />
+          )}
           {children}
         </body>
       </html>
