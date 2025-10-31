@@ -262,9 +262,24 @@ export function ReportView({ report, address, listing }: ReportViewProps) {
             </div>
 
             {/* Footer */}
-            <div className="border-t border-[#1E1E1E]/10 pt-8 text-center text-sm text-[#1E1E1E]/60">
-              Landlord Lies—exposing the truth behind every &apos;charming
-              studio.&apos;
+            <div className="border-t border-[#1E1E1E]/10 pt-8">
+              <div className="flex flex-col items-center justify-between gap-4 text-sm text-[#1E1E1E]/60 md:flex-row">
+                <p className="text-center md:text-left">
+                  Landlord Lies—exposing the truth behind every &apos;charming
+                  studio.&apos;
+                </p>
+                <div className="flex items-center gap-1 text-xs">
+                  <span>Powered by</span>
+                  <a
+                    href="https://maps.google.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-[#1E1E1E] hover:text-[#DC2626] transition-colors"
+                  >
+                    Google Maps
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -35,3 +35,59 @@ body {
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-title);
 }
+
+/* Google Places Autocomplete dropdown styling */
+.pac-container {
+  border-radius: 0.5rem !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  margin-top: 4px !important;
+  overflow: hidden !important;
+  background: white !important;
+}
+
+.pac-item {
+  padding: 12px 16px !important;
+  cursor: pointer !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+  font-size: 0.9375rem !important;
+  color: #1E1E1E !important;
+}
+
+.pac-item:last-child {
+  border-bottom: none !important;
+}
+
+.pac-item:hover,
+.pac-item-selected {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+}
+
+.pac-item-query {
+  color: #1E1E1E !important;
+  font-size: 0.9375rem !important;
+}
+
+.pac-matched {
+  color: #1E1E1E !important;
+  font-weight: 500 !important;
+}
+
+.pac-icon {
+  margin-right: 8px !important;
+}
+
+.pac-logo:after {
+  display: none !important;
+}
+
+.pac-container:after {
+  display: none !important;
+  content: none !important;
+}
+
+/* Hide Powered by Google attribution */
+.pac-container .pac-logo,
+.pac-container::after {
+  display: none !important;
+}

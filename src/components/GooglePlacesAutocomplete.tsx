@@ -12,20 +12,6 @@ interface GooglePlacesAutocompleteProps {
   id?: string;
 }
 
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      "gmp-basic-place-autocomplete": React.DetailedHTMLProps<
-        React.HTMLAttributes<HTMLElement> & {
-          "location-bias"?: string;
-          "requested-result-types"?: string;
-        },
-        HTMLElement
-      >;
-    }
-  }
-}
-
 export function GooglePlacesAutocomplete({
   value,
   onChange,
@@ -35,22 +21,22 @@ export function GooglePlacesAutocomplete({
   className = "",
   id,
 }: GooglePlacesAutocompleteProps) {
-  const autocompleteRef = useRef<HTMLElement | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const autocompleteRef = useRef<any>(null);
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
 
   // Check if Google Maps API is loaded
   useEffect(() => {
     const checkGoogleMaps = () => {
-      if (typeof window !== "undefined" && (window as any).google?.maps) {
+      if (
+        typeof window !== "undefined" &&
+        (window as any).google?.maps?.places?.Autocomplete
+      ) {
         setIsGoogleMapsLoaded(true);
       }
     };
 
-    // Check immediately
     checkGoogleMaps();
-
-    // Check periodically until loaded
     const interval = setInterval(() => {
       checkGoogleMaps();
       if (isGoogleMapsLoaded) {
@@ -61,99 +47,107 @@ export function GooglePlacesAutocomplete({
     return () => clearInterval(interval);
   }, [isGoogleMapsLoaded]);
 
-  // Initialize the web component once Google Maps is loaded
+  // Initialize Autocomplete once Google Maps is loaded
   useEffect(() => {
-    if (!isGoogleMapsLoaded || isInitialized) {
+    if (!isGoogleMapsLoaded || !inputRef.current || autocompleteRef.current) {
       return;
     }
 
-    // Wait for the element to be available
-    const checkElement = setInterval(() => {
-      if (autocompleteRef.current) {
-        clearInterval(checkElement);
-        initializeComponent();
+    const input = inputRef.current;
+    const google = (window as any).google;
+
+    // Create Autocomplete instance
+    const autocomplete = new google.maps.places.Autocomplete(input, {
+      types: ["address"],
+      fields: ["formatted_address", "address_components", "geometry"],
+    });
+
+    autocompleteRef.current = autocomplete;
+
+    // Handle place selection
+    const handlePlaceChanged = () => {
+      const place = autocomplete.getPlace();
+      
+      if (!place) return;
+
+      const formattedAddress = place.formatted_address || "";
+      
+      if (formattedAddress) {
+        onChange(formattedAddress);
+        if (onSelect) {
+          onSelect(formattedAddress, formattedAddress);
+        }
       }
-    }, 100);
+    };
 
-    let cleanup: (() => void) | null = null;
+    // Listen for place selection
+    autocomplete.addListener("place_changed", handlePlaceChanged);
 
-    const initializeComponent = () => {
-      const element = autocompleteRef.current as any;
-      if (!element) return;
+    // Style the autocomplete dropdown to match Places UI Kit
+    const styleAutocompleteDropdown = () => {
+      // Find the pac-container (Google's autocomplete dropdown)
+      const pacContainer = document.querySelector('.pac-container');
+      if (pacContainer) {
+        const container = pacContainer as HTMLElement;
+        container.style.borderRadius = '0.5rem';
+        container.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)';
+        container.style.border = '1px solid rgba(0, 0, 0, 0.1)';
+        container.style.marginTop = '4px';
+        container.style.overflow = 'hidden';
 
-      // Handle place selection
-      const handleSelect = async (event: CustomEvent) => {
-        const place = (event as any).detail?.place || (event as any).place;
-        if (!place) return;
-
-        // Get the formatted address from the place object
-        let formattedAddress = "";
-        
-        // Try different properties that might contain the address
-        if (place.formattedAddress) {
-          formattedAddress = place.formattedAddress;
-        } else if (place.formattedAddressText?.value) {
-          formattedAddress = place.formattedAddressText.value;
-        } else if (place.displayName) {
-          formattedAddress = place.displayName;
-        } else if (place.formattedAddressText) {
-          formattedAddress = place.formattedAddressText;
-        }
-
-        // If we still don't have an address, try to get it from the input value
-        if (!formattedAddress && element.value) {
-          formattedAddress = element.value;
-        }
-
-        if (formattedAddress) {
-          onChange(formattedAddress);
-          if (onSelect) {
-            onSelect(formattedAddress, formattedAddress);
-          }
-        }
-      };
-
-      // Add event listener
-      element.addEventListener("gmp-select", handleSelect);
-
-      // Set location bias to improve results (optional - can be configured)
-      // You can set this based on user's detected country or other preferences
-      if (typeof (window as any).google?.maps?.Circle !== "undefined") {
-        // Default to US center, but this can be made dynamic
-        const defaultCenter = { lat: 37.7749, lng: -122.4194 }; // San Francisco
-        element.locationBias = new (window as any).google.maps.Circle({
-          center: defaultCenter,
-          radius: 50000, // 50km radius
+        // Style the items
+        const items = container.querySelectorAll('.pac-item');
+        items.forEach((item: Element) => {
+          const el = item as HTMLElement;
+          el.style.padding = '12px 16px';
+          el.style.cursor = 'pointer';
+          el.style.borderBottom = '1px solid rgba(0, 0, 0, 0.05)';
+          el.style.fontSize = '0.9375rem';
+          
+          // Hover state
+          el.addEventListener('mouseenter', () => {
+            el.style.backgroundColor = 'rgba(0, 0, 0, 0.03)';
+          });
+          el.addEventListener('mouseleave', () => {
+            el.style.backgroundColor = 'transparent';
+          });
         });
+
+        // Remove last item border
+        if (items.length > 0) {
+          const lastItem = items[items.length - 1] as HTMLElement;
+          lastItem.style.borderBottom = 'none';
+        }
       }
-
-      setIsInitialized(true);
-
-      // Store cleanup function
-      cleanup = () => {
-        element.removeEventListener("gmp-select", handleSelect);
-      };
     };
 
+    // Apply styling when dropdown appears
+    const observer = new MutationObserver(styleAutocompleteDropdown);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    // Apply immediately in case dropdown already exists
+    styleAutocompleteDropdown();
+
+    // Cleanup
     return () => {
-      clearInterval(checkElement);
-      if (cleanup) {
-        cleanup();
+      if (autocompleteRef.current) {
+        google.maps.event.clearInstanceListeners(autocompleteRef.current);
+        autocompleteRef.current = null;
       }
+      observer.disconnect();
     };
-  }, [isGoogleMapsLoaded, isInitialized, onChange, onSelect]);
+  }, [isGoogleMapsLoaded, onChange, onSelect]);
 
   // Handle input value changes (for controlled component behavior)
-  useEffect(() => {
-    if (autocompleteRef.current && value) {
-      const element = autocompleteRef.current as any;
-      // Update the input value if needed
-      // Note: The web component manages its own input, so we mainly sync on selection
-    }
-  }, [value]);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onChange(e.target.value);
+  };
 
   return (
-    <div className={`relative w-full ${className}`}>
+    <div className="relative w-full">
       {/* Search icon - positioned on the left */}
       <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none z-10">
         <svg
@@ -171,43 +165,17 @@ export function GooglePlacesAutocomplete({
         </svg>
       </div>
 
-      {/* Google Places UI Kit Web Component */}
-      {isGoogleMapsLoaded ? (
-        <div style={{ position: "relative", width: "100%" }}>
-          <gmp-basic-place-autocomplete
-            ref={autocompleteRef}
-            id={id}
-            placeholder={placeholder}
-            disabled={disabled}
-            requested-result-types="address"
-            style={{
-              width: "100%",
-              minHeight: "56px",
-              paddingLeft: "48px",
-              paddingRight: "24px",
-              borderRadius: "1rem",
-              border: "2px solid rgba(30, 30, 30, 0.2)",
-              backgroundColor: "white",
-              fontSize: "1rem",
-              color: "#1E1E1E",
-              outline: "none",
-              boxSizing: "border-box",
-            }}
-          />
-        </div>
-      ) : (
-        // Fallback input while Google Maps loads
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          disabled={disabled}
-          id={id}
-          className="w-full rounded-2xl border-2 border-[#1E1E1E]/20 bg-white px-6 py-4 pl-12 pr-12 text-base text-[#1E1E1E] placeholder-[#1E1E1E]/50 focus:border-[#DC2626] focus:outline-none focus:ring-2 focus:ring-[#DC2626]/20"
-        />
-      )}
+      {/* Input field */}
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={handleInputChange}
+        placeholder={placeholder}
+        disabled={disabled}
+        id={id}
+        className={`w-full rounded-2xl border-2 border-[#1E1E1E]/20 bg-white px-6 py-4 pl-12 pr-12 text-base text-[#1E1E1E] placeholder:text-[#1E1E1E]/50 focus:border-[#DC2626] focus:outline-none focus:ring-2 focus:ring-[#DC2626]/20 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      />
     </div>
   );
 }
-

@@ -176,7 +176,6 @@ export function HeroSection() {
               onChange={setAddress}
               placeholder="Enter property address"
               disabled={loading}
-              className="w-full rounded-2xl border-2 border-[#1E1E1E]/20 bg-white px-6 py-4 pl-12 pr-12 text-base text-[#1E1E1E] placeholder-[#1E1E1E]/50 focus:border-[#DC2626] focus:outline-none focus:ring-2 focus:ring-[#DC2626]/20"
             />
 
             {error && (
