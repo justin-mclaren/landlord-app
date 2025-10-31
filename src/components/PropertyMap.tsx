@@ -182,11 +182,8 @@ export function PropertyMap({
 
       // Add markers for noise sources if noise level is high/medium
       if (noise && (noise.level === "high" || noise.level === "medium")) {
-        const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-        
-        if (googleMapsApiKey) {
-          // Find nearby highways/freeways - always show marker if noise is high/medium
-          if (noise.motorway_distance_m !== undefined && noise.motorway_distance_m < 2000) {
+        // Find nearby highways/freeways - always show marker if noise is high/medium
+        if (noise.motorway_distance_m !== undefined && noise.motorway_distance_m < 2000) {
             // Always create a marker - use calculated position from distance
             const offset = noise.motorway_distance_m || 500; // meters
             // Convert meters to degrees (rough approximation: 1 degree ≈ 111km)
@@ -234,75 +231,70 @@ export function PropertyMap({
             });
 
             // Try to find actual highway names via Places API (optional enhancement)
-            if (googleMapsApiKey) {
-              const highwaysUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lon}&radius=${Math.min(2000, noise.motorway_distance_m * 2)}&type=route&key=${googleMapsApiKey}`;
-              
-              fetch(highwaysUrl)
-                .then((res) => res.json())
-                .then((data) => {
-                  if (data.results && data.results.length > 0) {
-                    const highways = data.results
-                      .filter((place: any) => {
-                        const name = (place.name || "").toLowerCase();
-                        const types = place.types || [];
-                        return (
-                          types.includes("route") ||
-                          name.includes("highway") ||
-                          name.includes("freeway") ||
-                          name.includes("interstate") ||
-                          name.includes("i-") ||
-                          name.includes("us-") ||
-                          name.includes("state route")
-                        );
-                      })
-                      .slice(0, 1); // Just update the first marker with actual name
+            fetch(`/api/places/nearby?lat=${lat}&lon=${lon}&type=route&radius=${Math.min(2000, noise.motorway_distance_m * 2)}`)
+              .then((res) => res.json())
+              .then((data) => {
+                if (data.results && data.results.length > 0) {
+                  const highways = data.results
+                    .filter((place: any) => {
+                      const name = (place.name || "").toLowerCase();
+                      const types = place.types || [];
+                      return (
+                        types.includes("route") ||
+                        name.includes("highway") ||
+                        name.includes("freeway") ||
+                        name.includes("interstate") ||
+                        name.includes("i-") ||
+                        name.includes("us-") ||
+                        name.includes("state route")
+                      );
+                    })
+                    .slice(0, 1); // Just update the first marker with actual name
+                  
+                  if (highways.length > 0) {
+                    const place = highways[0];
+                    const placeLat = place.geometry.location.lat;
+                    const placeLng = place.geometry.location.lng;
                     
-                    if (highways.length > 0) {
-                      const place = highways[0];
-                      const placeLat = place.geometry.location.lat;
-                      const placeLng = place.geometry.location.lng;
-                      
-                      // Update existing marker position and title
-                      highwayMarker.setPosition({ lat: placeLat, lng: placeLng });
-                      highwayMarker.setTitle(place.name || "Highway");
-                      
-                      // Update info window
-                      const updatedInfoWindow = new google.maps.InfoWindow({
-                        content: `
-                          <div style="padding: 8px; font-family: system-ui, sans-serif;">
-                            <div style="font-weight: 600; color: #1E1E1E; margin-bottom: 4px;">
-                              🛣️ ${place.name || "Highway"}
-                            </div>
-                            <div style="color: #1E1E1E; font-size: 12px;">
-                              ${noise.motorway_distance_m ? `~${Math.round(noise.motorway_distance_m)}m away` : "Nearby"}
-                            </div>
-                            <div style="color: #DC2626; font-size: 11px; margin-top: 4px;">
-                              ⚠️ High noise source
-                            </div>
+                    // Update existing marker position and title
+                    highwayMarker.setPosition({ lat: placeLat, lng: placeLng });
+                    highwayMarker.setTitle(place.name || "Highway");
+                    
+                    // Update info window
+                    const updatedInfoWindow = new google.maps.InfoWindow({
+                      content: `
+                        <div style="padding: 8px; font-family: system-ui, sans-serif;">
+                          <div style="font-weight: 600; color: #1E1E1E; margin-bottom: 4px;">
+                            🛣️ ${place.name || "Highway"}
                           </div>
-                        `,
-                      });
-                      
-                      // Update click listener
-                      google.maps.event.clearListeners(highwayMarker, "click");
-                      highwayMarker.addListener("click", () => {
-                        updatedInfoWindow.open(map, highwayMarker);
-                      });
-                    }
+                          <div style="color: #1E1E1E; font-size: 12px;">
+                            ${noise.motorway_distance_m ? `~${Math.round(noise.motorway_distance_m)}m away` : "Nearby"}
+                          </div>
+                          <div style="color: #DC2626; font-size: 11px; margin-top: 4px;">
+                            ⚠️ High noise source
+                          </div>
+                        </div>
+                      `,
+                    });
+                    
+                    // Update click listener
+                    google.maps.event.clearListeners(highwayMarker, "click");
+                    highwayMarker.addListener("click", () => {
+                      updatedInfoWindow.open(map, highwayMarker);
+                    });
                   }
-                })
-                .catch((error) => {
-                  console.error("Error fetching highway details:", error);
-                  // Keep the fallback marker
-                });
-            }
+                }
+              })
+              .catch((error) => {
+                console.error("Error fetching highway details:", error);
+                // Keep the fallback marker
+              });
           }
 
           // Find nearby airports
           if (noise.airport_distance_m !== undefined && noise.airport_distance_m < 10000) {
-            const airportsUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lon}&radius=10000&type=airport&key=${googleMapsApiKey}`;
-            
-            fetch(airportsUrl)
+            // Use server-side API route to avoid CORS issues
+            fetch(`/api/places/nearby?lat=${lat}&lon=${lon}&type=airport&radius=10000`)
               .then((res) => res.json())
               .then((data) => {
                 if (data.results && data.results.length > 0) {
@@ -354,7 +346,6 @@ export function PropertyMap({
                 console.error("Error fetching airports:", error);
               });
           }
-        }
       }
 
       // Add info window for property

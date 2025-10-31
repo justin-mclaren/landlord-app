@@ -207,6 +207,13 @@ export function HeroSection() {
             mode="modal"
             fallbackRedirectUrl="/"
             forceRedirectUrl="/"
+            appearance={{
+              elements: {
+                modalContent: "max-w-md",
+                headerTitle: "text-2xl font-bold text-[#1E1E1E]",
+                headerSubtitle: "text-sm text-[#1E1E1E]/70 mt-2",
+              },
+            }}
           >
             <button ref={signUpButtonRef} type="button" />
           </SignUpButton>

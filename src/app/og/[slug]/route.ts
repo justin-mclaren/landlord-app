@@ -1,10 +1,11 @@
 /**
  * OG Image route
- * GET /og/[slug].png
+ * GET /og/[id].png
  * Returns OG image for social sharing
+ * Uses report ID instead of slug for security
  */
 import { NextResponse } from "next/server";
-import { getSlugMapping } from "@/lib/storage";
+import { getReportMapping } from "@/lib/storage";
 import { getOrCreateOGImage } from "@/lib/og-image";
 
 export const revalidate = 86400; // Revalidate every 24 hours
@@ -16,7 +17,7 @@ export async function GET(
   try {
     const { slug } = await params;
 
-    const mapping = await getSlugMapping(slug);
+    const mapping = await getReportMapping(slug);
     if (!mapping) {
       return new NextResponse("Not Found", { status: 404 });
     }

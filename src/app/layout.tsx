@@ -39,7 +39,38 @@ export default function RootLayout({
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      appearance={{
+        elements: {
+          rootBox: "mx-auto",
+          card: "shadow-lg",
+          headerTitle: "text-2xl font-bold text-[#1E1E1E]",
+          headerSubtitle: "text-sm text-[#1E1E1E]/70 mt-2",
+          socialButtonsBlockButton:
+            "border border-[#1E1E1E]/20 hover:bg-gray-50",
+          formButtonPrimary: "bg-[#DC2626] hover:bg-[#DC2626]/90 text-white",
+          formFieldLabel: "text-[#1E1E1E] font-medium",
+          formFieldInput: "border-[#1E1E1E]/20 focus:border-[#DC2626]",
+          footerActionLink: "text-[#DC2626] hover:text-[#DC2626]/80",
+          identityPreviewEditButton: "text-[#DC2626]",
+          identityPreviewText: "text-[#1E1E1E]",
+          formResendCodeLink: "text-[#DC2626]",
+        },
+        layout: {
+          socialButtonsPlacement: "top",
+          socialButtonsVariant: "blockButton",
+        },
+      }}
+      localization={{
+        locale: "en-US",
+        signUp: {
+          start: {
+            title: "Create your account",
+            subtitle: "Sign up to decode your first rental listing for free",
+          },
+        },
+      }}
+    >
       <html lang="en">
         <body
           className={`${inter.variable} ${satoshiBlack.variable} antialiased`}

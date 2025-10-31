@@ -56,7 +56,17 @@ export function Header() {
             // Loading state - show nothing or a placeholder
             <div className="h-8 w-8 rounded-full bg-gray-200 animate-pulse" />
           ) : !isSignedIn ? (
-            <SignUpButton mode="modal" fallbackRedirectUrl="/" forceRedirectUrl="/">
+            <SignUpButton
+              mode="modal"
+              fallbackRedirectUrl="/"
+              forceRedirectUrl="/"
+              appearance={{
+                elements: {
+                  headerTitle: "text-2xl font-bold text-[#1E1E1E]",
+                  headerSubtitle: "text-sm text-[#1E1E1E]/70 mt-2",
+                },
+              }}
+            >
               <button className="rounded-full bg-[#DC2626] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#DC2626]/90">
                 Sign up
               </button>

@@ -15,8 +15,7 @@ import {
 import { augmentProperty } from "@/lib/augment";
 import { getOrCreateDecoderReport } from "@/lib/decoder";
 import { getOrCreateOGImage } from "@/lib/og-image";
-import { generateSlugFromReport } from "@/lib/slug";
-import { storeSlugMapping } from "@/lib/storage";
+import { generateReportId, storeReportMapping } from "@/lib/storage";
 import { addrHash, prefsHash } from "@/lib/hash";
 import {
   NotFoundError,
@@ -319,20 +318,21 @@ export async function executeDecodeFlow(
     // Continue without OG image - it's optional for MVP
   }
 
-  // Step 6: Publish (Generate Slug)
+  // Step 6: Publish (Generate Unique ID)
   onProgress?.({
     step: "publish",
     progress: 0.95,
     message: "Finalizing...",
   });
 
-  const slug = generateSlugFromReport(listing, report);
-  const reportUrl = `/d/${slug}`;
+  // Generate unique, non-guessable ID for this report
+  const reportId = generateReportId();
+  const reportUrl = `/d/${reportId}`;
 
-  // Store slug mapping for retrieval
+  // Store report mapping for retrieval
   const addr = addrHash(listing.listing.address);
   const prefsKey = input.prefs ? prefsHash(input.prefs) : "default";
-  await storeSlugMapping(slug, addr, prefsKey, listing, report, augment);
+  await storeReportMapping(reportId, addr, prefsKey, listing, report, augment);
 
   onProgress?.({
     step: "complete",
@@ -342,7 +342,7 @@ export async function executeDecodeFlow(
 
   return {
     reportUrl,
-    slug,
+    slug: reportId, // Keep slug field for backward compatibility in types
   };
 }
 
