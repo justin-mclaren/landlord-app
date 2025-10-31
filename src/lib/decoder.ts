@@ -35,18 +35,40 @@ Here is a normalized listing + augmentation + preferences:
 
 <json>${JSON.stringify(payload, null, 2)}</json>
 
+IMPORTANT: If price, beds, or baths are missing/undefined, note this in your analysis. 
+You can still generate a report based on available data (location, features, year built, description, augmentation data).
+When data is missing, explicitly state that in your rationale and adjust scores accordingly.
+
+LOCATION INSIGHTS AVAILABLE:
+- Sex offender registry: Check augmentation.location_insights.sex_offenders for:
+  - count_1mi: Number of registered sex offenders within 1 mile
+  - count_2mi: Number of registered sex offenders within 2 miles
+  - registry_links: Official state registry URLs for verification
+  IMPORTANT: Only add a red flag if count_1mi > 10. If you do add this red flag, place it LAST in the red_flags array. Do NOT include a source_field for sex offender red flags.
+- Nearby amenities: Grocery stores, restaurants, parks, schools, transit (see augmentation.location_insights.nearby_amenities)
+- Schools: Nearby schools with ratings (see augmentation.location_insights.schools)
+- Transit: Public transportation access (see augmentation.location_insights.transit)
+
 Task:
-1) Write a 2-3 sentence reality summary that cuts through marketing speak.
+1) Write a 2-3 sentence reality summary that cuts through marketing speak. If listing data is incomplete, mention this upfront.
+   - If sex offender counts are available (count_1mi > 10), mention this safety concern prominently
 2) List up to 6 Red Flags (strongest first), citing which field triggers each. Be specific about what data supports each flag.
+   - DO NOT add a red flag about missing price/beds/baths - this is handled by the UI banner.
+   - Focus on actual property concerns based on available data (location, features, description, augmentation data).
+   - If sex offender counts exist (count_1mi > 10), include a red flag like "X registered sex offenders within 1 mile - check official registries for details"
+   - IMPORTANT: If you add a sex offender red flag, place it LAST in the red_flags array and do NOT include a source_field.
+   - If location insights show safety concerns (e.g., no nearby amenities, poor transit access), include those as red flags
 3) List up to 4 Positives. What genuinely stands out?
+   - Highlight good location features: nearby amenities, schools, transit access, walkability
 4) Scorecard: Rate each category (0-10) with short rationale:
-   - Value: Price relative to area, sqft, amenities
-   - Livability: Beds/baths, features, year built, overall quality
+   - Value: Price relative to area, sqft, amenities. If price is missing, score based on area/sqft/amenities only and note price unavailable.
+   - Livability: Beds/baths, features, year built, overall quality. If beds/baths missing, score based on features/year/quality only and note missing data.
    - Noise/Light: Based on noise augmentation data, proximity to highways/airports
-   - Hazards: Flood/wildfire risk from augmentation data
-   - Transparency: Quality of listing description, completeness of data
+   - Hazards: Flood/wildfire risk from augmentation data. Also consider location safety factors including sex offender proximity if count_1mi > 10.
+   - Transparency: Quality of listing description, completeness of data. If data is incomplete, score lower and note missing fields.
    Then calculate Total (0-100) as average of the 5 categories.
-5) Provide 6 follow-up questions for landlord/agent that would clarify concerns or red flags.
+5) Provide 6 follow-up questions for landlord/agent that would clarify concerns or red flags. If data is missing, include questions to get that information.
+   - If sex offender counts are present (count_1mi > 10), include a question like "Were you aware of registered sex offenders in this area?"
 6) Write a 120-char one-liner caption that summarizes the property.
 
 Return ONLY valid JSON in this exact structure:

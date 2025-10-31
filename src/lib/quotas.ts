@@ -66,7 +66,7 @@ export async function isInTrial(
     // Clerk handles trial state, so we check by seeing if they have Basic plan
     // and haven't used their trial decode yet
     const { has } = await auth();
-    const hasBasic = await has({ plan: "Basic" });
+    const hasBasic = await has({ plan: "basic_plan" });
 
     if (hasBasic) {
       const trialUsed = await hasUsedTrialDecode(userId);

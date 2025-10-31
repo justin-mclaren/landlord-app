@@ -31,7 +31,12 @@ export type RentCastResponse = {
   yearBuilt?: number;
   description?: string;
   features?: string[];
+  // Listing status fields
+  status?: string; // "Active", "Sold", "Rented", "Off Market", etc.
+  listedDate?: string; // ISO date string
+  removedDate?: string; // ISO date string
   // Add other RentCast fields as needed
+  [key: string]: unknown; // Allow other fields we haven't typed yet
 };
 
 /**
@@ -149,6 +154,11 @@ async function fetchRentCastRaw(
 
       const data = await response.json();
       
+      // Log raw response for debugging (first time only)
+      if (process.env.NODE_ENV === "development") {
+        console.log("[rentcast] Raw API response:", JSON.stringify(data, null, 2));
+      }
+      
       // RentCast may return an array or single object
       // Adjust based on actual API response format
       if (Array.isArray(data)) {
@@ -223,12 +233,17 @@ function normalizeRentCastResponse(
     address = `${response.city}, ${response.state}`;
   }
   
+  // Check if this is an active listing
+  const isActive = hasActiveListing(response);
+  
   return {
     source: {
       url,
       fetched_at: new Date().toISOString(),
       provider: "rentcast",
       version: "v1",
+      status: response.status,
+      has_active_listing: isActive,
     },
     listing: {
       address: address || "Unknown Address",
@@ -271,12 +286,39 @@ export async function getRentCastListing(
       const response = await fetchRentCastRaw(address);
       if (!response) return null;
       
+      // Check if this is an active listing
+      const isActive = hasActiveListing(response);
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          `[rentcast] Property ${address}: active listing=${isActive}, ` +
+          `status=${response.status || "unknown"}, ` +
+          `hasPrice=${!!response.price}, ` +
+          `hasBeds=${response.bedrooms !== undefined}, ` +
+          `hasBaths=${response.bathrooms !== undefined}`
+        );
+      }
+      
       // Cache the raw response, passing input address as fallback
       return normalizeRentCastResponse(response, url, address);
     }
   );
 
   return cached;
+}
+
+/**
+ * Check if RentCast response indicates an active listing
+ */
+export function hasActiveListing(response: RentCastResponse): boolean {
+  // Check status field if available
+  if (response.status) {
+    const statusLower = response.status.toLowerCase();
+    return statusLower === "active" || statusLower === "available";
+  }
+  
+  // Fallback: if we have price, beds, or baths, it's likely an active listing
+  // Note: This is a heuristic - some properties may have historical data
+  return !!(response.price || response.bedrooms !== undefined || response.bathrooms !== undefined);
 }
 
 /**

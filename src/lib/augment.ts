@@ -6,6 +6,7 @@ import type { ListingJSON } from "@/types/listing";
 import type { AugmentJSON } from "@/types/augment";
 import { getOrSet, cacheKey, CACHE_PREFIXES, CACHE_TTL } from "./cache";
 import { addrHash } from "./hash";
+import { computeLocationInsights } from "./location-insights";
 
 /**
  * Geocode an address using Nominatim (OpenStreetMap)
@@ -280,11 +281,20 @@ export async function augmentProperty(
         };
       }
 
-      // Compute noise, hazards, and commute if we have coordinates
+      // Compute noise, hazards, commute, and location insights if we have coordinates
       if (lat && lon) {
         augment.noise = await computeNoiseLevel(lat, lon);
         augment.hazards = await computeHazards(lat, lon);
         augment.commute = await computeCommute(lat, lon, prefs?.workAddress);
+        
+        // Compute location insights (sex offender registry, amenities, schools, transit)
+        const fullAddress = `${listing.listing.address}, ${listing.listing.city}, ${listing.listing.state} ${listing.listing.zip || ""}`.trim();
+        augment.location_insights = await computeLocationInsights(
+          lat,
+          lon,
+          listing.listing.state,
+          fullAddress
+        );
       }
 
       return augment;

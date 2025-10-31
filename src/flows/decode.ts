@@ -200,24 +200,23 @@ export async function executeDecodeFlow(
       }
     }
 
-    // Check again after potential merge
-    if (!hasCoreFields(listing)) {
-      const { listing: mergedListing } = listing;
+    // Check again after potential merge - only require address/city/state
+    const { listing: mergedListing } = listing;
+    if (!mergedListing.address || !mergedListing.city || !mergedListing.state) {
+      const stillMissing: string[] = [];
+      if (!mergedListing.address) stillMissing.push("address");
+      if (!mergedListing.city) stillMissing.push("city");
+      if (!mergedListing.state) stillMissing.push("state");
+      
       throw new DataQualityError(
-        `Property listing is missing required fields: ${missingFields.join(
-          ", "
-        )}`,
-        missingFields,
+        `Property listing is still missing required location fields after scraping: ${stillMissing.join(", ")}`,
+        stillMissing,
         {
           received: {
             address: mergedListing.address,
             city: mergedListing.city,
             state: mergedListing.state,
-            price: mergedListing.price,
-            beds: mergedListing.beds,
-            baths: mergedListing.baths,
           },
-          url: normalized.sourceMeta.url,
         }
       );
     }
@@ -253,29 +252,37 @@ export async function executeDecodeFlow(
     );
   }
 
-  if (!hasCoreFields(listing)) {
-    const { listing: l } = listing;
+  // Validate minimum required fields (address, city, state)
+  // Note: We allow listings without price/beds/baths - the decoder can handle partial data
+  const { listing: l } = listing;
+  if (!l.address || !l.city || !l.state) {
     const missingFields: string[] = [];
     if (!l.address) missingFields.push("address");
     if (!l.city) missingFields.push("city");
     if (!l.state) missingFields.push("state");
-    if (!l.price && l.beds === undefined && l.baths === undefined) {
-      missingFields.push("price/beds/baths");
-    }
 
     throw new DataQualityError(
-      "Property listing is missing required fields",
+      "Property listing is missing required location fields (address, city, state)",
       missingFields,
       {
         received: {
           address: l.address,
           city: l.city,
           state: l.state,
-          price: l.price,
-          beds: l.beds,
-          baths: l.baths,
         },
       }
+    );
+  }
+
+  // Log warning if listing is missing key fields but allow it to proceed
+  if (!l.price && l.beds === undefined && l.baths === undefined) {
+    const hasActive = listing.source.has_active_listing;
+    const status = listing.source.status;
+    console.warn(
+      `[decode] Listing for ${l.address} is missing price/beds/baths. ` +
+      `RentCast returned property record ` +
+      `(status: ${status || "unknown"}, has_active_listing: ${hasActive || false}). ` +
+      `Proceeding with partial data - decoder will note missing information.`
     );
   }
 
@@ -325,7 +332,7 @@ export async function executeDecodeFlow(
   // Store slug mapping for retrieval
   const addr = addrHash(listing.listing.address);
   const prefsKey = input.prefs ? prefsHash(input.prefs) : "default";
-  await storeSlugMapping(slug, addr, prefsKey, listing, report);
+  await storeSlugMapping(slug, addr, prefsKey, listing, report, augment);
 
   onProgress?.({
     step: "complete",

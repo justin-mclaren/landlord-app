@@ -460,6 +460,7 @@ CLERK_SECRET_KEY=...
 CLERK_WEBHOOK_SECRET=... # Clerk webhook signing secret (for billing events)
 KV_REST_API_URL=... # Vercel KV for quotas
 KV_REST_API_TOKEN=...
+FAMILY_WATCHDOG_API_KEY=... # Family Watchdog API key for sex offender registry data (optional)
 
 # Feature Flags
 FEATURE_SCRAPE_FALLBACK=true|false

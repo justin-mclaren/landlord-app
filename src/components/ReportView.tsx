@@ -4,15 +4,30 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { DecoderReport } from "@/types/report";
 import type { ListingJSON } from "@/types/listing";
+import type { AugmentJSON } from "@/types/augment";
+import { PropertyMap } from "./PropertyMap";
 
 interface ReportViewProps {
   report: DecoderReport;
   address: string;
   listing: ListingJSON;
+  augment?: AugmentJSON;
 }
 
-export function ReportView({ report, address, listing }: ReportViewProps) {
+export function ReportView({
+  report,
+  address,
+  listing,
+  augment,
+}: ReportViewProps) {
   const [copied, setCopied] = useState(false);
+
+  // Check if there's no active listing (missing price/beds/baths or explicit flag)
+  const hasNoActiveListing =
+    listing.source.has_active_listing === false ||
+    (!listing.listing.price &&
+      listing.listing.beds === undefined &&
+      listing.listing.baths === undefined);
 
   // Extract tags from listing data
   const tags: string[] = [];
@@ -52,9 +67,6 @@ export function ReportView({ report, address, listing }: ReportViewProps) {
     });
   };
 
-  const shareUrl = typeof window !== "undefined" ? window.location.href : "";
-  const shareText = `Check out this decoded listing: ${report.caption}`;
-
   return (
     <div className="min-h-screen bg-[#FFF8F0]">
       {/* Header Bar */}
@@ -82,6 +94,39 @@ export function ReportView({ report, address, listing }: ReportViewProps) {
           </Link>
         </div>
       </header>
+
+      {/* No Active Listing Banner */}
+      {hasNoActiveListing && (
+        <div className="border-b border-[#DC2626]/20 bg-[#DC2626]/5">
+          <div className="mx-auto max-w-7xl px-4 py-4 md:px-6 lg:px-8">
+            <div className="flex items-start gap-3">
+              <svg
+                className="h-5 w-5 flex-shrink-0 text-[#DC2626] mt-0.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-[#DC2626]">
+                  No Active Listing Found
+                </p>
+                <p className="mt-1 text-sm text-[#1E1E1E]/70">
+                  This property doesn&apos;t have an active listing (price,
+                  beds, or baths not available). This report is based on
+                  available property data and location information only.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-6 lg:px-8">
         <div className="relative">
@@ -166,20 +211,30 @@ export function ReportView({ report, address, listing }: ReportViewProps) {
                     <span className="text-2xl">▲</span> Red Flags
                   </h3>
                   <ul className="space-y-3">
-                    {report.red_flags.map((flag, index) => (
-                      <li key={index} className="flex items-start gap-3">
-                        <span className="mt-1 text-xl text-[#DC2626]">⊖</span>
-                        <span className="text-base text-[#1E1E1E] md:text-lg">
-                          {flag.title}
-                          {flag.source_field && (
-                            <span className="text-sm text-[#1E1E1E]/60">
-                              {" "}
-                              ({flag.source_field})
-                            </span>
-                          )}
-                        </span>
-                      </li>
-                    ))}
+                    {report.red_flags
+                      .filter(
+                        (flag) =>
+                          !flag.title
+                            .toLowerCase()
+                            .includes("incomplete listing") &&
+                          !flag.description
+                            .toLowerCase()
+                            .includes("incomplete listing")
+                      )
+                      .map((flag, index) => (
+                        <li key={index} className="flex items-start gap-3">
+                          <span className="mt-1 text-xl text-[#DC2626]">⊖</span>
+                          <span className="text-base text-[#1E1E1E] md:text-lg">
+                            {flag.title}
+                            {flag.source_field && (
+                              <span className="text-sm text-[#1E1E1E]/60">
+                                {" "}
+                                ({flag.source_field})
+                              </span>
+                            )}
+                          </span>
+                        </li>
+                      ))}
                   </ul>
                 </div>
               )}
@@ -203,6 +258,228 @@ export function ReportView({ report, address, listing }: ReportViewProps) {
                 </div>
               )}
             </div>
+
+            {/* Location Insights Section */}
+            {augment?.location_insights && (
+              <div className="mb-12 rounded-xl border border-[#1E1E1E]/10 bg-white p-6 shadow-sm">
+                <h3 className="mb-6 text-xl font-bold text-[#1E1E1E] md:text-2xl">
+                  Location Insights
+                </h3>
+
+                {/* Property Map */}
+                {listing.listing.lat && listing.listing.lon && (
+                  <div className="mb-6">
+                    <PropertyMap
+                      lat={listing.listing.lat}
+                      lon={listing.listing.lon}
+                      address={address}
+                      locationInsights={augment.location_insights}
+                      noise={augment.noise}
+                    />
+                  </div>
+                )}
+
+                {/* Sex Offender Registry */}
+                {augment.location_insights.sex_offenders?.registry_links && (
+                  <div className="mb-6">
+                    <h4 className="mb-3 text-sm font-semibold text-[#DC2626] uppercase tracking-wide">
+                      ⚠️ Safety Check
+                    </h4>
+                    {/* Display counts if available */}
+                    {(augment.location_insights.sex_offenders.count_1mi !==
+                      undefined ||
+                      augment.location_insights.sex_offenders.count_2mi !==
+                        undefined) && (
+                      <div className="mb-3 rounded-lg bg-[#DC2626]/10 p-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          {augment.location_insights.sex_offenders.count_1mi !==
+                            undefined && (
+                            <div>
+                              <div className="text-2xl font-bold text-[#DC2626]">
+                                {
+                                  augment.location_insights.sex_offenders
+                                    .count_1mi
+                                }
+                              </div>
+                              <div className="text-xs text-[#1E1E1E]/70">
+                                within 1 mile
+                              </div>
+                            </div>
+                          )}
+                          {augment.location_insights.sex_offenders.count_2mi !==
+                            undefined && (
+                            <div>
+                              <div className="text-2xl font-bold text-[#DC2626]">
+                                {
+                                  augment.location_insights.sex_offenders
+                                    .count_2mi
+                                }
+                              </div>
+                              <div className="text-xs text-[#1E1E1E]/70">
+                                within 2 miles
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <p className="mt-2 text-xs text-[#1E1E1E]/70">
+                          Registered sex offenders near this property
+                        </p>
+                      </div>
+                    )}
+                    <p className="mb-3 text-sm text-[#1E1E1E]/70">
+                      {augment.location_insights.sex_offenders.note ||
+                        "Check official state registries for current information. This data is public record and may change."}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {augment.location_insights.sex_offenders.registry_links.map(
+                        (link, index) => (
+                          <a
+                            key={index}
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 rounded-lg bg-[#DC2626]/10 px-4 py-2 text-sm font-medium text-[#DC2626] transition-colors hover:bg-[#DC2626]/20"
+                          >
+                            {link.name}
+                            <svg
+                              className="h-4 w-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                              />
+                            </svg>
+                          </a>
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Nearby Amenities */}
+                {augment.location_insights.nearby_amenities && (
+                  <div className="mb-6">
+                    <h4 className="mb-3 text-sm font-semibold text-[#1E1E1E] uppercase tracking-wide">
+                      📍 Nearby (within 1 mile)
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+                      {augment.location_insights.nearby_amenities
+                        .grocery_stores !== undefined && (
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-[#1E1E1E]">
+                            {
+                              augment.location_insights.nearby_amenities
+                                .grocery_stores
+                            }
+                          </div>
+                          <div className="text-xs text-[#1E1E1E]/60">
+                            Grocery Stores
+                          </div>
+                        </div>
+                      )}
+                      {augment.location_insights.nearby_amenities
+                        .restaurants !== undefined && (
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-[#1E1E1E]">
+                            {
+                              augment.location_insights.nearby_amenities
+                                .restaurants
+                            }
+                          </div>
+                          <div className="text-xs text-[#1E1E1E]/60">
+                            Restaurants
+                          </div>
+                        </div>
+                      )}
+                      {augment.location_insights.nearby_amenities.parks !==
+                        undefined && (
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-[#1E1E1E]">
+                            {augment.location_insights.nearby_amenities.parks}
+                          </div>
+                          <div className="text-xs text-[#1E1E1E]/60">Parks</div>
+                        </div>
+                      )}
+                      {augment.location_insights.nearby_amenities.schools !==
+                        undefined && (
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-[#1E1E1E]">
+                            {augment.location_insights.nearby_amenities.schools}
+                          </div>
+                          <div className="text-xs text-[#1E1E1E]/60">
+                            Schools
+                          </div>
+                        </div>
+                      )}
+                      {augment.location_insights.nearby_amenities
+                        .transit_stations !== undefined && (
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-[#1E1E1E]">
+                            {
+                              augment.location_insights.nearby_amenities
+                                .transit_stations
+                            }
+                          </div>
+                          <div className="text-xs text-[#1E1E1E]/60">
+                            Transit Stations
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Nearby Schools */}
+                {augment.location_insights.schools &&
+                  augment.location_insights.schools.length > 0 && (
+                    <div className="mb-6">
+                      <h4 className="mb-3 text-sm font-semibold text-[#1E1E1E] uppercase tracking-wide">
+                        🏫 Nearby Schools
+                      </h4>
+                      <ul className="space-y-2">
+                        {augment.location_insights.schools
+                          .slice(0, 5)
+                          .map((school, index) => (
+                            <li
+                              key={index}
+                              className="flex items-center justify-between text-sm"
+                            >
+                              <span className="text-[#1E1E1E]">
+                                {school.name}
+                                {school.type && (
+                                  <span className="ml-2 text-xs text-[#1E1E1E]/60">
+                                    ({school.type})
+                                  </span>
+                                )}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                {school.rating && (
+                                  <span className="text-xs text-[#1E1E1E]/60">
+                                    ⭐ {school.rating.toFixed(1)}
+                                  </span>
+                                )}
+                                {school.distance_m && (
+                                  <span className="text-xs text-[#1E1E1E]/60">
+                                    {school.distance_m < 1000
+                                      ? `${school.distance_m}m`
+                                      : `${(school.distance_m / 1000).toFixed(
+                                          1
+                                        )}km`}
+                                  </span>
+                                )}
+                              </div>
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  )}
+              </div>
+            )}
 
             {/* Ask the Landlord Section */}
             {report.follow_up_questions.length > 0 && (

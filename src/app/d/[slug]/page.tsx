@@ -62,8 +62,8 @@ export default async function ReportPage({
     notFound();
   }
 
-  const { listing, report } = mapping;
+  const { listing, report, augment } = mapping;
   const address = `${listing.listing.address}, ${listing.listing.city}, ${listing.listing.state}`;
 
-  return <ReportView report={report} address={address} listing={listing} />;
+  return <ReportView report={report} address={address} listing={listing} augment={augment} />;
 }

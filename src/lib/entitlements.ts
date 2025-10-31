@@ -10,15 +10,15 @@ import { auth } from "@clerk/nextjs/server";
 
 /**
  * Check if user has a specific plan
- * Plan names are capitalized: "Basic", "Pro"
- * @param planName - Plan name to check (e.g., 'Basic', 'Pro')
+ * Plan keys are lowercase snake_case: "basic_plan", "pro_plan"
+ * @param planKey - Plan key to check (e.g., 'basic_plan', 'pro_plan')
  */
-export async function hasPlan(planName: string): Promise<boolean> {
+export async function hasPlan(planKey: string): Promise<boolean> {
   try {
     const { has } = await auth();
-    return await has({ plan: planName });
+    return await has({ plan: planKey });
   } catch (error) {
-    console.error(`Error checking plan ${planName}:`, error);
+    console.error(`Error checking plan ${planKey}:`, error);
     return false;
   }
 }
@@ -39,17 +39,26 @@ export async function hasFeature(featureName: string): Promise<boolean> {
 }
 
 /**
- * Get user's current plan name from Clerk
- * Returns capitalized plan name: "Basic", "Pro", or null
+ * Get user's current plan key from Clerk
+ * Returns plan key: "pro_plan", "basic_plan", or null
+ * Internally maps to display name: "Pro", "Basic"
  */
 export async function getUserPlan(): Promise<string | null> {
   try {
-    const { has } = await auth();
+    const { has, userId } = await auth();
+    
+    if (!userId) {
+      return null;
+    }
 
-    // Check plans in order (Pro > Basic)
-    // Clerk handles plan names as-is (capitalized)
-    if (await has({ plan: "Pro" })) return "Pro";
-    if (await has({ plan: "Basic" })) return "Basic";
+    // Check plans using their keys (lowercase snake_case)
+    // Plan keys are defined in Clerk Dashboard
+    const hasPro = await has({ plan: "pro_plan" });
+    const hasBasic = await has({ plan: "basic_plan" });
+
+    // Return display name for backward compatibility
+    if (hasPro) return "Pro";
+    if (hasBasic) return "Basic";
 
     return null;
   } catch (error) {
@@ -67,10 +76,9 @@ export async function getSubscriptionStatus(): Promise<string | null> {
   try {
     const { has } = await auth();
 
-    // Check if user has any plan (Clerk handles status internally)
-    // If has() returns true, subscription is active or trialing
-    const hasBasic = await has({ plan: "Basic" });
-    const hasPro = await has({ plan: "Pro" });
+    // Check if user has any plan using plan keys
+    const hasBasic = await has({ plan: "basic_plan" });
+    const hasPro = await has({ plan: "pro_plan" });
 
     if (hasBasic || hasPro) {
       // Clerk's has() returns true for both active and trialing subscriptions
@@ -101,10 +109,9 @@ export async function hasActiveSubscription(
   try {
     const { has } = await auth();
 
-    // Check if user has any paid plan
-    // Clerk's has() returns true for both active and trialing subscriptions
-    const hasBasic = await has({ plan: "Basic" });
-    const hasPro = await has({ plan: "Pro" });
+    // Check if user has any paid plan using plan keys
+    const hasBasic = await has({ plan: "basic_plan" });
+    const hasPro = await has({ plan: "pro_plan" });
 
     return hasBasic || hasPro;
   } catch (error) {

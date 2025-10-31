@@ -8,6 +8,8 @@ export type ListingJSON = {
     fetched_at: string;
     provider: "rentcast" | "scrape" | "merge";
     version?: string; // Schema version for cache busting
+    status?: string; // Listing status from RentCast (e.g., "Active", "Sold", "Off Market")
+    has_active_listing?: boolean; // Whether this property has an active listing
   };
   listing: {
     address: string;

@@ -92,7 +92,7 @@ export async function POST(request: Request) {
       }
 
       throw new ValidationError(errorMessage, errorCode, {
-        upgradeUrl: "/pricing",
+            upgradeUrl: "/pricing",
         remaining: quotaCheck.remaining,
         limit: quotaCheck.limit,
       });
